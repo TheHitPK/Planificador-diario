@@ -30,6 +30,7 @@ export default function BackupMenu({ data, onImport }: Props) {
       const backup = await parseBackup(file);
       const summary = `${backup.activities.length} disciplinas, ${Object.keys(backup.checks).length} días registrados y ${backup.tasks.length} pendientes${
         backup.finance ? `, ${backup.finance.movements.length} movimientos de dinero` : ''
+      }${backup.nutrition ? `, ${backup.nutrition.log.length} alimentos registrados y ${backup.nutrition.body.length} registros corporales` : ''
       }`;
       if (!confirm(`Se reemplazarán TODOS tus datos actuales por los del respaldo (${summary}). ¿Continuar?`)) return;
       onImport(backup);

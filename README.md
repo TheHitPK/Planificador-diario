@@ -16,5 +16,6 @@ npm run build    # genera /dist
 - **Mis disciplinas**: agregar, editar, reordenar y eliminar disciplinas (icono, nombre, descripción).
 - **Pendientes**: tareas con nombre, descripción, estado, prioridad y plazo.
 - **Finanzas**: entradas y salidas en $ (Zelle, efectivo, USDT) o Bs (efectivo, transferencia, Pago Móvil). Tasa BCV $ y € automática (ve.dolarapi.com) o manual, tasa de compra de USDT, cambios y ventas de divisas, gastos vs costos, saldos por cuenta y calculadora.
+- **Nutrición**: diario de comidas con calorías, proteínas, carbohidratos, grasas y fibra frente a tus objetivos; lista de alimentos editable; registro de peso, % de grasa y cintura con gráficos; cálculo de objetivos (Katch-McArdle o Mifflin-St Jeor según tu actividad y meta).
 
 > Los datos viven en el navegador: si borras los datos del sitio o cambias de navegador, se pierden.

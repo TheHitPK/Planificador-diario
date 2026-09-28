@@ -1,5 +1,6 @@
 import type { Activity, Checks, Task } from '../types';
 import type { FinanceData } from '../finance/types';
+import type { NutritionData } from '../nutrition/types';
 import { toISO, today } from './dates';
 
 export interface BackupData {
@@ -9,17 +10,19 @@ export interface BackupData {
   startISO: string;
   /** Opcional: los respaldos hechos antes del módulo de Finanzas no lo traen */
   finance?: FinanceData;
+  /** Opcional: los respaldos hechos antes del módulo de Nutrición no lo traen */
+  nutrition?: NutritionData;
 }
 
 interface BackupFile extends BackupData {
   app: 'planificacion-diaria';
-  version: 1 | 2;
+  version: 1 | 2 | 3;
   exportedAt: string;
 }
 
 /** Descarga todos los datos como un archivo .json. */
 export function exportBackup(data: BackupData) {
-  const file: BackupFile = { app: 'planificacion-diaria', version: 2, exportedAt: new Date().toISOString(), ...data };
+  const file: BackupFile = { app: 'planificacion-diaria', version: 3, exportedAt: new Date().toISOString(), ...data };
   const blob = new Blob([JSON.stringify(file, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -53,6 +56,16 @@ function isValidFinance(f: unknown): f is FinanceData {
   return movementsOk && ratesOk;
 }
 
+function isValidNutrition(n: unknown): n is NutritionData {
+  if (!isObj(n) || !Array.isArray(n.foods) || !Array.isArray(n.log) || !Array.isArray(n.body) || !isObj(n.targets)) return false;
+  const foodsOk = n.foods.every((f) => isObj(f) && isStr(f.id) && isStr(f.name) && isNum(f.per) && isNum(f.kcal));
+  const logOk = n.log.every((e) => isObj(e) && isStr(e.id) && isStr(e.date) && ISO_DATE.test(e.date) && isNum(e.kcal));
+  const bodyOk = n.body.every((e) => isObj(e) && isStr(e.id) && isStr(e.date) && ISO_DATE.test(e.date) && isNum(e.weight));
+  const targetsOk = ['kcal', 'protein', 'carbs', 'fat', 'fiber'].every((k) => isNum((n.targets as Record<string, unknown>)[k]));
+  const profileOk = n.profile === null || (isObj(n.profile) && isNum(n.profile.age) && isNum(n.profile.height));
+  return foodsOk && logOk && bodyOk && targetsOk && profileOk;
+}
+
 /** Lee y valida un archivo de respaldo. Lanza un Error con un mensaje legible si no es válido. */
 export async function parseBackup(file: File): Promise<BackupData> {
   let raw: unknown;
@@ -65,7 +78,7 @@ export async function parseBackup(file: File): Promise<BackupData> {
     throw new Error('Este archivo no es un respaldo de Planificación diaria.');
   }
 
-  const { activities, checks, tasks, startISO, finance } = raw;
+  const { activities, checks, tasks, startISO, finance, nutrition } = raw;
 
   const activitiesOk =
     Array.isArray(activities) &&
@@ -88,8 +101,9 @@ export async function parseBackup(file: File): Promise<BackupData> {
     );
   const startOk = isStr(startISO) && ISO_DATE.test(startISO);
   const financeOk = finance === undefined || isValidFinance(finance);
+  const nutritionOk = nutrition === undefined || isValidNutrition(nutrition);
 
-  if (!activitiesOk || !checksOk || !tasksOk || !startOk || !financeOk) {
+  if (!activitiesOk || !checksOk || !tasksOk || !startOk || !financeOk || !nutritionOk) {
     throw new Error('El respaldo está incompleto o dañado.');
   }
 
@@ -99,5 +113,6 @@ export async function parseBackup(file: File): Promise<BackupData> {
     tasks: tasks as Task[],
     startISO: startISO as string,
     finance: finance as FinanceData | undefined,
+    nutrition: nutrition as NutritionData | undefined,
   };
 }

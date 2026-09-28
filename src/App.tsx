@@ -9,6 +9,9 @@ import BackupMenu from './components/BackupMenu';
 import type { BackupData } from './lib/backup';
 import FinanceModule from './finance/FinanceModule';
 import type { FinanceData, Movement, Rates } from './finance/types';
+import NutritionModule from './nutrition/NutritionModule';
+import type { BodyEntry, Food, LogEntry, NutritionData, Profile, Targets } from './nutrition/types';
+import { DEFAULT_FOODS, DEFAULT_TARGETS } from './nutrition/defaults';
 
 const DEFAULT_ACTIVITIES: Activity[] = [
   { id: newId(), icon: '📚', name: 'Leer 30 min', description: 'Leer al menos 30 minutos de un libro.' },
@@ -18,13 +21,14 @@ const DEFAULT_ACTIVITIES: Activity[] = [
   { id: newId(), icon: '⏰', name: 'Levantarme a las 7:00', description: 'Levantarme a las 7:00 a. m.' },
 ];
 
-type Tab = 'plan' | 'actividades' | 'pendientes' | 'finanzas';
+type Tab = 'plan' | 'actividades' | 'pendientes' | 'finanzas' | 'nutricion';
 
 const TABS: { id: Tab; label: string }[] = [
   { id: 'plan', label: 'Planificación diaria' },
   { id: 'actividades', label: 'Mis disciplinas' },
   { id: 'pendientes', label: 'Pendientes' },
   { id: 'finanzas', label: 'Finanzas' },
+  { id: 'nutricion', label: 'Nutrición' },
 ];
 
 export default function App() {
@@ -37,6 +41,12 @@ export default function App() {
   const [rates, setRates] = useLocalStorage<Rates | null>('pd.fin.rates', null);
   const [rateHistory, setRateHistory] = useLocalStorage<FinanceData['rateHistory']>('pd.fin.rateHistory', {});
   const finance: FinanceData = { movements, rates, rateHistory };
+  const [foods, setFoods] = useLocalStorage<Food[]>('pd.nut.foods', DEFAULT_FOODS);
+  const [foodLog, setFoodLog] = useLocalStorage<LogEntry[]>('pd.nut.log', []);
+  const [body, setBody] = useLocalStorage<BodyEntry[]>('pd.nut.body', []);
+  const [profile, setProfile] = useLocalStorage<Profile | null>('pd.nut.profile', null);
+  const [targets, setTargets] = useLocalStorage<Targets>('pd.nut.targets', DEFAULT_TARGETS);
+  const nutrition: NutritionData = { foods, log: foodLog, body, profile, targets };
 
   const toggleCheck = (iso: string, activityId: string) => {
     setChecks((prev) => {
@@ -60,6 +70,13 @@ export default function App() {
       setMovements(data.finance.movements);
       setRates(data.finance.rates);
       setRateHistory(data.finance.rateHistory);
+    }
+    if (data.nutrition) {
+      setFoods(data.nutrition.foods);
+      setFoodLog(data.nutrition.log);
+      setBody(data.nutrition.body);
+      setProfile(data.nutrition.profile);
+      setTargets(data.nutrition.targets);
     }
   };
 
@@ -85,7 +102,7 @@ export default function App() {
             </button>
           ))}
         </nav>
-        <BackupMenu data={{ activities, checks, tasks, startISO, finance }} onImport={importBackup} />
+        <BackupMenu data={{ activities, checks, tasks, startISO, finance, nutrition }} onImport={importBackup} />
       </header>
 
       <main className="content">
@@ -103,6 +120,16 @@ export default function App() {
             setMovements={setMovements}
             setRates={setRates}
             setRateHistory={setRateHistory}
+          />
+        )}
+        {tab === 'nutricion' && (
+          <NutritionModule
+            data={nutrition}
+            setFoods={setFoods}
+            setLog={setFoodLog}
+            setBody={setBody}
+            setProfile={setProfile}
+            setTargets={setTargets}
           />
         )}
       </main>
