@@ -265,6 +265,58 @@ class ApiIntegrationTest {
                 .andExpect(jsonPath("$.bmi").value(25.3));
     }
 
+    // -------------------------------------------------------------- importación
+
+    @Test
+    void importaElRespaldoDelFrontend() throws Exception {
+        String token = register(uniqueEmail());
+        String yesterday = TODAY.minusDays(1).toString();
+        String backup = """
+                {"app":"planificacion-diaria","version":3,"exportedAt":"2026-09-30T12:00:00Z","startISO":"%1$s",
+                 "activities":[{"id":"a1","icon":"📚","name":"Leer 30 min","description":""},
+                               {"id":"a2","icon":"💧","name":"Beber agua","description":"2 L"}],
+                 "checks":{"%1$s":["a1","a2","borrada"],"2999-01-01":["a1"]},
+                 "tasks":[{"id":"t1","name":"Reparar licuadora","description":"","status":"completada",
+                           "priority":"alta","deadline":"%1$s"}],
+                 "finance":{"rates":null,"rateHistory":{},"movements":[
+                   {"id":"m1","kind":"entrada","date":"%1$s","account":"zelle","amount":500,"description":"Sueldo",
+                    "incomeType":"sueldo","rateUsd":855.66,"rateEur":972.65},
+                   {"id":"m2","kind":"salida","date":"%1$s","account":"zelle","amount":100,"description":"Venta",
+                    "reason":"venta_divisas","rateUsd":855.66,"rateEur":972.65,"linkId":"L1"},
+                   {"id":"m3","kind":"entrada","date":"%1$s","account":"pagomovil","amount":85000,"description":"Venta",
+                    "incomeType":"cambio","rateUsd":855.66,"rateEur":972.65,"linkId":"L1"}]},
+                 "nutrition":{
+                   "foods":[{"id":"f-arroz","name":"Arroz blanco cocido","per":100,"unit":"g","kcal":130,
+                             "protein":2.7,"carbs":28.2,"fat":0.3,"fiber":0.4},
+                            {"id":"x1","name":"Cachapa","per":1,"unit":"unidad","kcal":300,"protein":8,"carbs":45,
+                             "fat":9,"fiber":3}],
+                   "log":[{"id":"e1","date":"%1$s","meal":"almuerzo","name":"Arroz blanco cocido","amount":200,
+                           "unit":"g","foodId":"f-arroz","kcal":260,"protein":5.4,"carbs":56.4,"fat":0.6,"fiber":0.8}],
+                   "body":[{"id":"b1","date":"%1$s","weight":78.4,"bodyFat":18.6}],
+                   "profile":{"sex":"hombre","age":27,"height":176,"activity":"moderado","goal":"recomposicion"},
+                   "targets":{"kcal":2440,"protein":172,"carbs":285,"fat":68,"fiber":34}}}
+                """.formatted(yesterday);
+
+        call(HttpMethod.POST, "/api/import/legacy", token, backup)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.disciplines").value(2))
+                .andExpect(jsonPath("$.checks").value(2))      // ignora la disciplina borrada y el día futuro
+                .andExpect(jsonPath("$.movements").value(3))
+                .andExpect(jsonPath("$.foods").value(1))       // el arroz se enlaza al catálogo global
+                .andExpect(jsonPath("$.profile").value(true));
+
+        call(HttpMethod.GET, "/api/finance/summary", token, null)
+                .andExpect(jsonPath("$.accounts[?(@.account=='ZELLE')].balance").value(hasItem(400.0)))
+                .andExpect(jsonPath("$.month.income").value(TODAY.minusDays(1).getMonth() == TODAY.getMonth() ? 500.0 : 0.0));
+        call(HttpMethod.GET, "/api/tasks?status=COMPLETED", token, null).andExpect(jsonPath("$", hasSize(1)));
+        call(HttpMethod.GET, "/api/nutrition/profile", token, null)
+                .andExpect(jsonPath("$.targets.kcal").value(2440))
+                .andExpect(jsonPath("$.age").value(27));
+
+        // Segunda importación: la cuenta ya tiene datos → 409
+        call(HttpMethod.POST, "/api/import/legacy", token, backup).andExpect(status().isConflict());
+    }
+
     // ---------------------------------------------------------------- helpers
 
     private ResultActions call(HttpMethod method, String url, String token, String json) throws Exception {

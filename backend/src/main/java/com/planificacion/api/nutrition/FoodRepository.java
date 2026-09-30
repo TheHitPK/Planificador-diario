@@ -27,6 +27,8 @@ public interface FoodRepository extends JpaRepository<Food, UUID> {
     @Query("select f from Food f where f.id = :id and (f.userId is null or f.userId = :userId)")
     Optional<Food> findVisible(@Param("id") UUID id, @Param("userId") UUID userId);
 
+    List<Food> findByUserIdIsNull();
+
     default List<Food> search(UUID userId, String query) {
         return query == null || query.isBlank() ? findVisible(userId) : searchVisible(userId, query.trim());
     }

@@ -4,15 +4,15 @@ import type { BodyEntry, Profile } from './types';
 import { bmi, bmiLabel, fmt1 } from './calc';
 import { parseAmount } from '../finance/calc';
 import { formatDM, fromISO, toISO, today } from '../lib/dates';
-import { newId } from '../lib/storage';
 
 interface Props {
   body: BodyEntry[];
   profile: Profile | null;
-  onChange: (fn: (prev: BodyEntry[]) => BodyEntry[]) => void;
+  onSave: (entry: BodyEntry) => void;
+  onDelete: (id: string) => void;
 }
 
-export default function BodyPage({ body, profile, onChange }: Props) {
+export default function BodyPage({ body, profile, onSave, onDelete }: Props) {
   const [date, setDate] = useState(toISO(today()));
   const [weight, setWeight] = useState('');
   const [bodyFat, setBodyFat] = useState('');
@@ -34,9 +34,9 @@ export default function BodyPage({ body, profile, onChange }: Props) {
     if (!(w > 0 && w < 400)) return setError('Escribe un peso válido en kg.');
     if (bf !== undefined && !(bf > 2 && bf < 70)) return setError('El % de grasa debe estar entre 2 y 70.');
     if (wa !== undefined && !(wa > 30 && wa < 250)) return setError('La cintura debe estar en cm.');
-    const entry: BodyEntry = { id: newId(), date, weight: w, bodyFat: bf, waist: wa, note: note.trim() || undefined };
+    const entry: BodyEntry = { id: '', date, weight: w, bodyFat: bf, waist: wa, note: note.trim() || undefined };
     // Un registro por día: si ya existe ese día, se reemplaza
-    onChange((prev) => [...prev.filter((b) => b.date !== date), entry]);
+    onSave(entry);
     setWeight('');
     setBodyFat('');
     setWaist('');
@@ -46,7 +46,7 @@ export default function BodyPage({ body, profile, onChange }: Props) {
 
   const remove = (b: BodyEntry) => {
     if (!confirm(`¿Eliminar el registro del ${formatDM(fromISO(b.date))}?`)) return;
-    onChange((prev) => prev.filter((x) => x.id !== b.id));
+    onDelete(b.id);
   };
 
   const chartData = sorted.map((b) => ({

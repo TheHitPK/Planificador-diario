@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { Activity, Checks } from '../types';
 import { DAY_NAMES, MONTH_NAMES, addDays, formatDM, range, startOfWeek, toISO, today } from '../lib/dates';
 import { doneOn, levelFor } from '../lib/stats';
@@ -8,14 +8,20 @@ interface Props {
   activities: Activity[];
   checks: Checks;
   onToggle: (iso: string, activityId: string) => void;
+  /** Pide cargar los días de la semana visible si aún no están. */
+  onRangeNeeded?: (from: string, to: string) => void;
 }
 
-export default function WeekTable({ activities, checks, onToggle }: Props) {
+export default function WeekTable({ activities, checks, onToggle, onRangeNeeded }: Props) {
   const todayDate = today();
   const [weekStart, setWeekStart] = useState(() => startOfWeek(todayDate));
   const days = range(weekStart, 7);
   const weekEnd = days[6];
   const isCurrentWeek = toISO(weekStart) === toISO(startOfWeek(todayDate));
+
+  useEffect(() => {
+    onRangeNeeded?.(toISO(weekStart), toISO(addDays(weekStart, 6)));
+  }, [weekStart, onRangeNeeded]);
 
   const monthLabel =
     weekStart.getMonth() === weekEnd.getMonth()

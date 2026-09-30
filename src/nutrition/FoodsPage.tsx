@@ -2,11 +2,11 @@ import { useState, type FormEvent } from 'react';
 import type { Food, FoodUnit } from './types';
 import { fmt1, kcalFromMacros } from './calc';
 import { parseAmount } from '../finance/calc';
-import { newId } from '../lib/storage';
 
 interface Props {
   foods: Food[];
-  onChange: (fn: (prev: Food[]) => Food[]) => void;
+  onSave: (food: Food, isNew: boolean) => void;
+  onDelete: (id: string) => void;
 }
 
 type Draft = Record<'name' | 'per' | 'kcal' | 'protein' | 'carbs' | 'fat' | 'fiber', string> & { unit: FoodUnit };
@@ -14,7 +14,7 @@ const EMPTY: Draft = { name: '', per: '100', unit: 'g', kcal: '', protein: '', c
 
 const UNIT_LABEL: Record<FoodUnit, string> = { g: 'gramos', ml: 'mililitros', unidad: 'unidad(es)' };
 
-export default function FoodsPage({ foods, onChange }: Props) {
+export default function FoodsPage({ foods, onSave, onDelete }: Props) {
   const [draft, setDraft] = useState<Draft>(EMPTY);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
@@ -30,7 +30,7 @@ export default function FoodsPage({ foods, onChange }: Props) {
     if (!(per > 0)) return setError('La porción debe ser mayor que 0.');
     const kcal = parseAmount(draft.kcal) > 0 ? parseAmount(draft.kcal) : autoKcal;
     const food: Food = {
-      id: editingId ?? newId(),
+      id: editingId ?? '',
       name: draft.name.trim(),
       per,
       unit: draft.unit,
@@ -40,7 +40,7 @@ export default function FoodsPage({ foods, onChange }: Props) {
       fat: n('fat'),
       fiber: n('fiber'),
     };
-    onChange((prev) => (editingId ? prev.map((f) => (f.id === editingId ? food : f)) : [...prev, food]));
+    onSave(food, !editingId);
     cancel();
   };
 
@@ -61,7 +61,7 @@ export default function FoodsPage({ foods, onChange }: Props) {
 
   const remove = (f: Food) => {
     if (!confirm(`¿Eliminar “${f.name}” de tu lista? Lo que ya registraste no cambia.`)) return;
-    onChange((prev) => prev.filter((x) => x.id !== f.id));
+    onDelete(f.id);
     if (editingId === f.id) cancel();
   };
 
@@ -172,12 +172,20 @@ export default function FoodsPage({ foods, onChange }: Props) {
                   <td>{fmt1(f.fat)}</td>
                   <td>{fmt1(f.fiber)}</td>
                   <td className="row-actions">
-                    <button className="btn ghost small" onClick={() => edit(f)}>
-                      Editar
-                    </button>
-                    <button className="btn danger small" onClick={() => remove(f)}>
-                      ✕
-                    </button>
+                    {f.global ? (
+                      <span className="muted small" title="Catálogo compartido: crea uno propio para ajustar los valores">
+                        Catálogo
+                      </span>
+                    ) : (
+                      <>
+                        <button className="btn ghost small" onClick={() => edit(f)}>
+                          Editar
+                        </button>
+                        <button className="btn danger small" onClick={() => remove(f)}>
+                          ✕
+                        </button>
+                      </>
+                    )}
                   </td>
                 </tr>
               ))}

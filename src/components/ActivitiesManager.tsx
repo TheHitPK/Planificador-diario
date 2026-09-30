@@ -1,18 +1,20 @@
 import { useState, type FormEvent } from 'react';
 import type { Activity } from '../types';
-import { newId } from '../lib/storage';
 
 const ICONS = ['📚', '💧', '🏋️', '🛡️', '⏰', '🏃', '🧘', '🥗', '😴', '💻', '✍️', '🎸', '🙏', '🧹', '💰', '🚭', '📵', '🦷', '☀️', '🧠'];
 
 interface Props {
   activities: Activity[];
-  onChange: (next: Activity[]) => void;
+  onCreate: (draft: Omit<Activity, 'id'>) => void;
+  onUpdate: (id: string, draft: Omit<Activity, 'id'>) => void;
+  onDelete: (id: string) => void;
+  onReorder: (ordered: Activity[]) => void;
 }
 
 type Draft = Omit<Activity, 'id'>;
 const EMPTY: Draft = { icon: '📚', name: '', description: '' };
 
-export default function ActivitiesManager({ activities, onChange }: Props) {
+export default function ActivitiesManager({ activities, onCreate, onUpdate, onDelete, onReorder }: Props) {
   const [draft, setDraft] = useState<Draft>(EMPTY);
   const [editingId, setEditingId] = useState<string | null>(null);
 
@@ -20,11 +22,8 @@ export default function ActivitiesManager({ activities, onChange }: Props) {
     e.preventDefault();
     const clean = { ...draft, name: draft.name.trim(), description: draft.description.trim() };
     if (!clean.name) return;
-    if (editingId) {
-      onChange(activities.map((a) => (a.id === editingId ? { ...a, ...clean } : a)));
-    } else {
-      onChange([...activities, { id: newId(), ...clean }]);
-    }
+    if (editingId) onUpdate(editingId, clean);
+    else onCreate(clean);
     cancel();
   };
 
@@ -40,7 +39,7 @@ export default function ActivitiesManager({ activities, onChange }: Props) {
 
   const remove = (a: Activity) => {
     if (!confirm(`¿Eliminar “${a.name}”? Dejará de aparecer en la tabla y en las estadísticas.`)) return;
-    onChange(activities.filter((x) => x.id !== a.id));
+    onDelete(a.id);
     if (editingId === a.id) cancel();
   };
 
@@ -49,7 +48,7 @@ export default function ActivitiesManager({ activities, onChange }: Props) {
     if (target < 0 || target >= activities.length) return;
     const next = [...activities];
     [next[index], next[target]] = [next[target], next[index]];
-    onChange(next);
+    onReorder(next);
   };
 
   return (

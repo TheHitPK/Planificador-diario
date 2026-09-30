@@ -14,8 +14,9 @@ docker compose up -d          # Postgres en localhost:5433
 ```
 
 - Flyway crea las tablas al arrancar (`src/main/resources/db/migration`).
-- El perfil `dev` (activo por defecto) trae una clave JWT de desarrollo. **En producción** define `JWT_SECRET`
-  (Base64, ≥ 32 bytes: `openssl rand -base64 48`) y usa otro perfil.
+- El perfil `dev` (activo por defecto) trae una clave JWT de desarrollo. **En producción** arranca con otro perfil
+  (`SPRING_PROFILES_ACTIVE=prod`) y define `JWT_SECRET` (Base64, ≥ 32 bytes: `openssl rand -base64 48`);
+  sin ella la app se niega a arrancar. Ajusta también `app.cors.allowed-origins` al dominio del frontend.
 - El host usa el puerto **5433** porque en este equipo hay un PostgreSQL de Windows ocupando el 5432.
   Se cambia con la variable `DB_PORT`.
 - Salud: `GET /actuator/health`.
@@ -46,7 +47,8 @@ com.planificacion.api
 ├── planning     Días cumplidos + semáforo
 ├── task         Pendientes
 ├── finance      Movimientos, cambios de divisas, tasas BCV, resumen
-└── nutrition    Alimentos, diario, cuerpo, perfil y plan
+├── nutrition    Alimentos, diario, cuerpo, perfil y plan
+└── importer     Migración del respaldo del frontend
 ```
 
 Decisiones clave:
@@ -178,16 +180,17 @@ Todo bajo `/api`. Salvo `auth/*`, todo requiere `Authorization: Bearer <accessTo
 | | `PUT/DELETE /planning/{fecha}/disciplines/{id}` | Marcar / desmarcar |
 | Pendientes | `GET /tasks?status=` · `POST /tasks` | Lista (activos por defecto) y crear |
 | | `GET/PUT/DELETE /tasks/{id}` · `PATCH /tasks/{id}/status` | CRUD y cambio de estado |
-| Finanzas | `GET /finance/movements?month=&kind=` · `POST` | Entradas / salidas |
+| Finanzas | `GET /finance/movements?month=&kind=` (o `?from=&to=`) · `POST` | Entradas / salidas |
 | | `GET/PUT/DELETE /finance/movements/{id}` | Borrar un cambio borra sus dos lados |
 | | `POST /finance/exchanges` | Cambio / venta de divisas (salida + entrada enlazadas) |
 | | `GET /finance/summary?month=` | Saldos por cuenta, totales $/Bs/€, promedio USDT, mes, 6 meses |
 | | `GET /finance/rates?date=` · `POST /finance/rates/refresh` · `PUT /finance/rates/manual` | Tasas BCV |
 | Nutrición | `GET /nutrition/foods?q=` · `POST` · `PUT/DELETE /nutrition/foods/{id}` | Catálogo + propios |
-| | `GET /nutrition/diary?date=` · `GET /nutrition/diary/totals?from=&to=` | Día con % por macro / totales |
+| | `GET /nutrition/diary?date=` · `GET /nutrition/diary/totals?from=&to=` · `GET /nutrition/diary/entries?from=&to=` | Día con % por macro / totales / registros |
 | | `POST /nutrition/diary/entries` · `PUT/DELETE .../{id}` · `POST /nutrition/diary/copy` | Registrar comidas |
 | | `GET /nutrition/body` · `PUT /nutrition/body` · `DELETE /nutrition/body/{id}` | Peso, grasa, IMC |
 | | `GET/PUT /nutrition/profile` · `PUT /nutrition/profile/targets` | Perfil y objetivos |
 | | `GET /nutrition/plan` · `POST /nutrition/plan/apply` | Calcular / aplicar plan |
+| Importación | `POST /import/legacy` | Carga el respaldo JSON del frontend (solo en cuentas vacías, todo o nada) |
 
 La tasa BCV se obtiene de `ve.dolarapi.com` (servicio público, no oficial del BCV) al pedirla y cada 3 horas.

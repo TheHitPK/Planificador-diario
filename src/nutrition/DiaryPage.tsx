@@ -1,16 +1,16 @@
-import { useMemo, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { Bar, BarChart, CartesianGrid, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import type { Food, LogEntry, Meal, NutritionData } from './types';
 import { MEALS, MEAL_ICON, MEAL_LABEL } from './defaults';
 import { dayEntries, fmt1, kcalFromMacros, macrosFor, sumMacros } from './calc';
 import { DAY_NAMES, DAY_SHORT, addDays, formatDM, fromISO, toISO, today, weekdayIndex } from '../lib/dates';
 import { parseAmount } from '../finance/calc';
-import { newId } from '../lib/storage';
 import MacroBars from './MacroBars';
+import type { NutritionOps } from './NutritionModule';
 
 interface Props {
   data: NutritionData;
-  setLog: (fn: (prev: LogEntry[]) => LogEntry[]) => void;
+  ops: NutritionOps;
 }
 
 const UNIT_LABEL = { g: 'g', ml: 'ml', unidad: 'unid.' } as const;
@@ -21,10 +21,16 @@ const mealForNow = (): Meal => {
   return h < 11 ? 'desayuno' : h < 16 ? 'almuerzo' : h < 19 ? 'merienda' : 'cena';
 };
 
-export default function DiaryPage({ data, setLog }: Props) {
+export default function DiaryPage({ data, ops }: Props) {
   const todayISO = toISO(today());
   const [date, setDate] = useState(todayISO);
   const d = fromISO(date);
+
+  // El día visible y los 6 anteriores (gráfico semanal) deben estar cargados.
+  const { ensureRange } = ops;
+  useEffect(() => {
+    ensureRange(toISO(addDays(fromISO(date), -7)), date);
+  }, [date, ensureRange]);
 
   const entries = useMemo(() => dayEntries(data.log, date), [data.log, date]);
   const consumed = sumMacros(entries);
@@ -34,15 +40,15 @@ export default function DiaryPage({ data, setLog }: Props) {
   const dayLabel =
     date === todayISO ? 'Hoy' : date === toISO(addDays(today(), -1)) ? 'Ayer' : `${DAY_NAMES[weekdayIndex(d)]} ${formatDM(d)}`;
 
-  const addEntries = (items: LogEntry[]) => setLog((prev) => [...prev, ...items]);
-  const remove = (id: string) => setLog((prev) => prev.filter((e) => e.id !== id));
+  const addEntries = ops.addEntries;
+  const remove = ops.removeEntry;
 
   const copyPrevious = () => {
     const prevISO = toISO(addDays(d, -1));
     const prev = dayEntries(data.log, prevISO);
     if (prev.length === 0) return alert('El día anterior no tiene comidas registradas.');
     if (!confirm(`¿Copiar ${prev.length} alimentos del día anterior a este día?`)) return;
-    addEntries(prev.map((e) => ({ ...e, id: newId(), date })));
+    ops.copyDay(prevISO, date);
   };
 
   // Últimos 7 días (terminando en el día que estás viendo)
@@ -221,7 +227,7 @@ function AddFoodForm({ foods, date, onAdd }: { foods: Food[]; date: string; onAd
     if (mode === 'lista') {
       if (!food) return setError('Elige un alimento de la lista.');
       if (!(nAmount > 0)) return setError('Escribe la cantidad.');
-      onAdd([{ id: newId(), date, meal, name: food.name, amount: nAmount, unit: food.unit, foodId: food.id, ...macrosFor(food, nAmount) }]);
+      onAdd([{ id: '', date, meal, name: food.name, amount: nAmount, unit: food.unit, foodId: food.id, ...macrosFor(food, nAmount) }]);
       setAmount(String(food.per));
     } else {
       const p = parseAmount(quick.protein) || 0;
@@ -232,7 +238,7 @@ function AddFoodForm({ foods, date, onAdd }: { foods: Food[]; date: string; onAd
       if (!(kcal > 0)) return setError('Escribe las calorías o los macros.');
       onAdd([
         {
-          id: newId(), date, meal, name: quick.name.trim(), amount: 1, unit: 'unidad',
+          id: '', date, meal, name: quick.name.trim(), amount: 1, unit: 'unidad',
           kcal, protein: p, carbs: c, fat: g, fiber: parseAmount(quick.fiber) || 0,
         },
       ]);

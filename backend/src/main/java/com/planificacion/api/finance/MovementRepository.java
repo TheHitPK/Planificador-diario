@@ -11,6 +11,8 @@ public interface MovementRepository extends JpaRepository<Movement, UUID> {
 
     Optional<Movement> findByIdAndUserId(UUID id, UUID userId);
 
+    boolean existsByUserId(UUID userId);
+
     List<Movement> findByUserIdAndDateBetweenOrderByDateDescCreatedAtDesc(UUID userId, LocalDate from, LocalDate to);
 
     List<Movement> findByUserIdAndKindAndDateBetweenOrderByDateDescCreatedAtDesc(UUID userId, MovementKind kind,

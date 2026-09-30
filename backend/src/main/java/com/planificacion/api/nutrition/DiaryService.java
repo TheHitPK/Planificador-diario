@@ -16,6 +16,7 @@ import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -64,6 +65,18 @@ public class DiaryService {
         percent.put("fiber", pct(consumed, targets, Macros::fiber));
 
         return new DiaryResponse(date, consumed, targets, remaining, percent, meals);
+    }
+
+    /** Registros individuales de un rango (el frontend los agrupa por día). */
+    @Transactional(readOnly = true)
+    public List<LogEntryResponse> entries(UUID userId, LocalDate from, LocalDate to) {
+        if (to.isBefore(from) || ChronoUnit.DAYS.between(from, to) > 800) {
+            throw new BusinessRuleException("Rango inválido (máximo 800 días)");
+        }
+        return repo.findByUserIdAndDateBetween(userId, from, to).stream()
+                .sorted(Comparator.comparing(FoodLogEntry::getDate).thenComparing(FoodLogEntry::getCreatedAt))
+                .map(LogEntryResponse::from)
+                .toList();
     }
 
     /** Totales por día en un rango (para el gráfico de 7 días, promedios, etc.). */

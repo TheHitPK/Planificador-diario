@@ -1,25 +1,22 @@
-import type { Activity, Checks, Task } from './types';
-import { newId, useLocalStorage } from './lib/storage';
-import { toISO, today } from './lib/dates';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useLocalStorage } from './lib/storage';
+import { useAuth } from './api/AuthContext';
+import type { ApiUser } from './api/client';
+import { describeImport, hasLegacyData, importToServer } from './api/migration';
+import { usePlanningStore } from './api/stores/usePlanningStore';
+import { useTasksStore } from './api/stores/useTasksStore';
+import { useFinanceStore } from './api/stores/useFinanceStore';
+import { useNutritionStore } from './api/stores/useNutritionStore';
+import type { BackupData } from './lib/backup';
 import WeekTable from './components/WeekTable';
 import StatsPanel from './components/StatsPanel';
 import ActivitiesManager from './components/ActivitiesManager';
 import TasksModule from './components/TasksModule';
 import BackupMenu from './components/BackupMenu';
-import type { BackupData } from './lib/backup';
+import AuthScreen from './components/AuthScreen';
+import MigrationBanner from './components/MigrationBanner';
 import FinanceModule from './finance/FinanceModule';
-import type { FinanceData, Movement, Rates } from './finance/types';
 import NutritionModule from './nutrition/NutritionModule';
-import type { BodyEntry, Food, LogEntry, NutritionData, Profile, Targets } from './nutrition/types';
-import { DEFAULT_FOODS, DEFAULT_TARGETS } from './nutrition/defaults';
-
-const DEFAULT_ACTIVITIES: Activity[] = [
-  { id: newId(), icon: '📚', name: 'Leer 30 min', description: 'Leer al menos 30 minutos de un libro.' },
-  { id: newId(), icon: '💧', name: 'Beber 2 L de agua', description: 'Tomar 2 litros de agua durante el día.' },
-  { id: newId(), icon: '🏋️', name: 'Ejercicio / Gym', description: 'Entrenar en el gym o hacer ejercicio.' },
-  { id: newId(), icon: '🛡️', name: 'No ver porno', description: 'Mantenerme el día completo sin ver porno.' },
-  { id: newId(), icon: '⏰', name: 'Levantarme a las 7:00', description: 'Levantarme a las 7:00 a. m.' },
-];
 
 type Tab = 'plan' | 'actividades' | 'pendientes' | 'finanzas' | 'nutricion';
 
@@ -32,55 +29,61 @@ const TABS: { id: Tab; label: string }[] = [
 ];
 
 export default function App() {
+  const { state } = useAuth();
+  if (state.status === 'loading') return <div className="splash">Cargando…</div>;
+  if (state.status === 'anon') return <AuthScreen notice={state.reason} />;
+  // key: al cambiar de usuario se descarta todo el estado del anterior
+  return <Dashboard key={state.user.id} user={state.user} />;
+}
+
+type LoadState = { status: 'loading' } | { status: 'ready' } | { status: 'error'; message: string };
+
+function Dashboard({ user }: { user: ApiUser }) {
+  const { logout } = useAuth();
   const [tab, setTab] = useLocalStorage<Tab>('pd.tab', 'plan');
-  const [activities, setActivities] = useLocalStorage<Activity[]>('pd.activities', DEFAULT_ACTIVITIES);
-  const [checks, setChecks] = useLocalStorage<Checks>('pd.checks', {});
-  const [tasks, setTasks] = useLocalStorage<Task[]>('pd.tasks', []);
-  const [startISO, setStartISO] = useLocalStorage<string>('pd.start', () => toISO(today()));
-  const [movements, setMovements] = useLocalStorage<Movement[]>('pd.fin.movements', []);
-  const [rates, setRates] = useLocalStorage<Rates | null>('pd.fin.rates', null);
-  const [rateHistory, setRateHistory] = useLocalStorage<FinanceData['rateHistory']>('pd.fin.rateHistory', {});
-  const finance: FinanceData = { movements, rates, rateHistory };
-  const [foods, setFoods] = useLocalStorage<Food[]>('pd.nut.foods', DEFAULT_FOODS);
-  const [foodLog, setFoodLog] = useLocalStorage<LogEntry[]>('pd.nut.log', []);
-  const [body, setBody] = useLocalStorage<BodyEntry[]>('pd.nut.body', []);
-  const [profile, setProfile] = useLocalStorage<Profile | null>('pd.nut.profile', null);
-  const [targets, setTargets] = useLocalStorage<Targets>('pd.nut.targets', DEFAULT_TARGETS);
-  const nutrition: NutritionData = { foods, log: foodLog, body, profile, targets };
+  const planning = usePlanningStore();
+  const tasks = useTasksStore();
+  const finance = useFinanceStore();
+  const nutrition = useNutritionStore();
+  const [load, setLoad] = useState<LoadState>({ status: 'loading' });
 
-  const toggleCheck = (iso: string, activityId: string) => {
-    setChecks((prev) => {
-      const current = prev[iso] ?? [];
-      const next = current.includes(activityId)
-        ? current.filter((id) => id !== activityId)
-        : [...current, activityId];
-      return { ...prev, [iso]: next };
-    });
-    // Si marcas un día anterior a tu inicio, ese día pasa a ser el nuevo inicio.
-    if (iso < startISO) setStartISO(iso);
+  const { load: loadPlanning } = planning;
+  const { load: loadTasks } = tasks;
+  const { load: loadFinance } = finance;
+  const { load: loadNutrition } = nutrition;
+  const loadAll = useCallback(async () => {
+    await Promise.all([loadPlanning(), loadTasks(), loadFinance(), loadNutrition()]);
+  }, [loadPlanning, loadTasks, loadFinance, loadNutrition]);
+
+  useEffect(() => {
+    loadAll()
+      .then(() => setLoad({ status: 'ready' }))
+      .catch((e: Error) => setLoad({ status: 'error', message: e.message }));
+  }, [loadAll]);
+
+  const importBackup = async (data: BackupData) => {
+    const result = await importToServer(data);
+    await loadAll();
+    return describeImport(result);
   };
 
-  const importBackup = (data: BackupData) => {
-    setActivities(data.activities);
-    setChecks(data.checks);
-    setTasks(data.tasks);
-    setStartISO(data.startISO);
-    // Respaldos anteriores a Finanzas no traen estos datos: se dejan los actuales.
-    if (data.finance) {
-      setMovements(data.finance.movements);
-      setRates(data.finance.rates);
-      setRateHistory(data.finance.rateHistory);
-    }
-    if (data.nutrition) {
-      setFoods(data.nutrition.foods);
-      setFoodLog(data.nutrition.log);
-      setBody(data.nutrition.body);
-      setProfile(data.nutrition.profile);
-      setTargets(data.nutrition.targets);
-    }
-  };
+  const accountEmpty =
+    planning.activities.length === 0 && tasks.tasks.length === 0 && finance.data.movements.length === 0;
+  const showMigration = load.status === 'ready' && accountEmpty && hasLegacyData();
 
-  const pendingCount = tasks.filter((t) => t.status !== 'completada').length;
+  const backupData: BackupData = useMemo(
+    () => ({
+      activities: planning.activities,
+      checks: planning.checks,
+      tasks: tasks.tasks,
+      startISO: planning.startISO,
+      finance: finance.data,
+      nutrition: nutrition.data,
+    }),
+    [planning.activities, planning.checks, planning.startISO, tasks.tasks, finance.data, nutrition.data],
+  );
+
+  const pendingCount = tasks.tasks.filter((t) => t.status !== 'completada').length;
 
   return (
     <div className="app">
@@ -102,35 +105,73 @@ export default function App() {
             </button>
           ))}
         </nav>
-        <BackupMenu data={{ activities, checks, tasks, startISO, finance, nutrition }} onImport={importBackup} />
+        <div className="topbar-right">
+          <BackupMenu data={backupData} onImport={importBackup} />
+          <div className="user-menu">
+            <span className="user-name" title={user.email}>
+              {user.fullName}
+            </span>
+            <button className="btn ghost small" onClick={() => void logout()}>
+              Salir
+            </button>
+          </div>
+        </div>
       </header>
 
       <main className="content">
-        {tab === 'plan' && (
+        {load.status === 'loading' && <p className="empty">Cargando tus datos…</p>}
+        {load.status === 'error' && (
+          <section className="card">
+            <p className="form-error">No se pudieron cargar tus datos: {load.message}</p>
+            <button className="btn primary" onClick={() => window.location.reload()}>
+              Reintentar
+            </button>
+          </section>
+        )}
+        {load.status === 'ready' && (
           <>
-            <WeekTable activities={activities} checks={checks} onToggle={toggleCheck} />
-            <StatsPanel activities={activities} checks={checks} startISO={startISO} />
+            {showMigration && <MigrationBanner onDone={loadAll} />}
+            {tab === 'plan' && (
+              <>
+                <WeekTable
+                  activities={planning.activities}
+                  checks={planning.checks}
+                  onToggle={planning.toggle}
+                  onRangeNeeded={planning.ensureRange}
+                />
+                <StatsPanel activities={planning.activities} checks={planning.checks} startISO={planning.startISO} />
+              </>
+            )}
+            {tab === 'actividades' && (
+              <ActivitiesManager
+                activities={planning.activities}
+                onCreate={planning.createActivity}
+                onUpdate={planning.updateActivity}
+                onDelete={planning.deleteActivity}
+                onReorder={planning.reorder}
+              />
+            )}
+            {tab === 'pendientes' && (
+              <TasksModule
+                tasks={tasks.tasks}
+                onCreate={tasks.create}
+                onUpdate={tasks.update}
+                onStatus={tasks.setStatus}
+                onDelete={tasks.remove}
+              />
+            )}
+            {tab === 'finanzas' && (
+              <FinanceModule
+                data={finance.data}
+                onAdd={finance.add}
+                onUpdate={finance.update}
+                onDelete={finance.remove}
+                onRefreshRates={finance.refreshRates}
+                onSaveRates={finance.saveManualRates}
+              />
+            )}
+            {tab === 'nutricion' && <NutritionModule data={nutrition.data} ops={nutrition} />}
           </>
-        )}
-        {tab === 'actividades' && <ActivitiesManager activities={activities} onChange={setActivities} />}
-        {tab === 'pendientes' && <TasksModule tasks={tasks} onChange={setTasks} />}
-        {tab === 'finanzas' && (
-          <FinanceModule
-            data={finance}
-            setMovements={setMovements}
-            setRates={setRates}
-            setRateHistory={setRateHistory}
-          />
-        )}
-        {tab === 'nutricion' && (
-          <NutritionModule
-            data={nutrition}
-            setFoods={setFoods}
-            setLog={setFoodLog}
-            setBody={setBody}
-            setProfile={setProfile}
-            setTargets={setTargets}
-          />
         )}
       </main>
     </div>

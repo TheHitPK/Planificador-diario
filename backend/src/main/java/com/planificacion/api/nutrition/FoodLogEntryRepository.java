@@ -14,4 +14,6 @@ public interface FoodLogEntryRepository extends JpaRepository<FoodLogEntry, UUID
     List<FoodLogEntry> findByUserIdAndDateBetween(UUID userId, LocalDate from, LocalDate to);
 
     Optional<FoodLogEntry> findByIdAndUserId(UUID id, UUID userId);
+
+    boolean existsByUserId(UUID userId);
 }

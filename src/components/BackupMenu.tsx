@@ -3,7 +3,8 @@ import { exportBackup, parseBackup, type BackupData } from '../lib/backup';
 
 interface Props {
   data: BackupData;
-  onImport: (data: BackupData) => void;
+  /** Sube el respaldo al servidor. Lanza si falla (ej. la cuenta ya tiene datos). */
+  onImport: (data: BackupData) => Promise<string>;
 }
 
 type Notice = { tone: 'ok' | 'error'; text: string } | null;
@@ -32,9 +33,8 @@ export default function BackupMenu({ data, onImport }: Props) {
         backup.finance ? `, ${backup.finance.movements.length} movimientos de dinero` : ''
       }${backup.nutrition ? `, ${backup.nutrition.log.length} alimentos registrados y ${backup.nutrition.body.length} registros corporales` : ''
       }`;
-      if (!confirm(`Se reemplazarán TODOS tus datos actuales por los del respaldo (${summary}). ¿Continuar?`)) return;
-      onImport(backup);
-      flash({ tone: 'ok', text: 'Datos importados.' });
+      if (!confirm(`Se cargará en tu cuenta: ${summary}. Solo funciona si tu cuenta está vacía. ¿Continuar?`)) return;
+      flash({ tone: 'ok', text: await onImport(backup) });
     } catch (err) {
       flash({ tone: 'error', text: err instanceof Error ? err.message : 'No se pudo importar.' });
     }
@@ -48,7 +48,7 @@ export default function BackupMenu({ data, onImport }: Props) {
       <button
         className="btn ghost small"
         onClick={() => fileRef.current?.click()}
-        title="Cargar un respaldo .json (reemplaza los datos actuales)"
+        title="Subir un respaldo .json a tu cuenta (solo si está vacía)"
       >
         ⬆ Importar
       </button>

@@ -96,6 +96,13 @@ public class NutritionController {
         return diary.totals(userId, from, to);
     }
 
+    @GetMapping("/diary/entries")
+    public List<LogEntryResponse> entries(@CurrentUserId UUID userId,
+                                          @RequestParam @DateTimeFormat(iso = DATE) LocalDate from,
+                                          @RequestParam @DateTimeFormat(iso = DATE) LocalDate to) {
+        return diary.entries(userId, from, to);
+    }
+
     @PostMapping("/diary/entries")
     @ResponseStatus(HttpStatus.CREATED)
     public LogEntryResponse addEntry(@CurrentUserId UUID userId, @Valid @RequestBody LogEntryRequest req) {

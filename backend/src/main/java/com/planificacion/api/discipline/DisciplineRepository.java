@@ -16,6 +16,8 @@ public interface DisciplineRepository extends JpaRepository<Discipline, UUID> {
 
     Optional<Discipline> findByIdAndUserId(UUID id, UUID userId);
 
+    boolean existsByUserId(UUID userId);
+
     @Query("select coalesce(max(d.position), -1) + 1 from Discipline d where d.userId = :userId")
     int nextPosition(@Param("userId") UUID userId);
 }

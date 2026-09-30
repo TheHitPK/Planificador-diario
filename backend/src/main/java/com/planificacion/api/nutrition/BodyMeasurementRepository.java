@@ -15,6 +15,8 @@ public interface BodyMeasurementRepository extends JpaRepository<BodyMeasurement
 
     Optional<BodyMeasurement> findByIdAndUserId(UUID id, UUID userId);
 
+    boolean existsByUserId(UUID userId);
+
     Optional<BodyMeasurement> findFirstByUserIdOrderByDateDesc(UUID userId);
 
     Optional<BodyMeasurement> findFirstByUserIdAndBodyFatPctIsNotNullOrderByDateDesc(UUID userId);

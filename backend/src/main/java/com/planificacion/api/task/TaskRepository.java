@@ -12,4 +12,6 @@ public interface TaskRepository extends JpaRepository<Task, UUID> {
     List<Task> findByUserIdAndStatusInOrderByDeadlineAsc(UUID userId, Collection<TaskStatus> statuses);
 
     Optional<Task> findByIdAndUserId(UUID id, UUID userId);
+
+    boolean existsByUserId(UUID userId);
 }

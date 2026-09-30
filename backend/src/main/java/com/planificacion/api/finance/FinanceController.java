@@ -46,11 +46,17 @@ public class FinanceController {
 
     // ---- Movimientos (entradas y salidas) ----
 
-    /** {@code GET /api/finance/movements?month=2026-09&kind=EXPENSE} — por defecto el mes actual. */
+    /**
+     * {@code GET /api/finance/movements?month=2026-09&kind=EXPENSE} — por defecto el mes actual.
+     * Con {@code from} y {@code to} devuelve un rango arbitrario (el frontend carga todo para calcular saldos).
+     */
     @GetMapping("/movements")
     public List<MovementResponse> list(@CurrentUserId UUID userId,
                                        @RequestParam(required = false) @DateTimeFormat(pattern = "yyyy-MM") YearMonth month,
+                                       @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+                                       @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
                                        @RequestParam(required = false) MovementKind kind) {
+        if (from != null && to != null) return movements.list(userId, from, to, kind);
         return movements.list(userId, month != null ? month : YearMonth.now(clock), kind);
     }
 

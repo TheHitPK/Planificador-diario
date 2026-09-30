@@ -30,8 +30,12 @@ public class MovementService {
 
     @Transactional(readOnly = true)
     public List<MovementResponse> list(UUID userId, YearMonth month, MovementKind kind) {
-        LocalDate from = month.atDay(1);
-        LocalDate to = month.atEndOfMonth();
+        return list(userId, month.atDay(1), month.atEndOfMonth(), kind);
+    }
+
+    @Transactional(readOnly = true)
+    public List<MovementResponse> list(UUID userId, LocalDate from, LocalDate to, MovementKind kind) {
+        if (to.isBefore(from)) throw new BusinessRuleException("'to' no puede ser anterior a 'from'");
         List<Movement> items = kind == null
                 ? repo.findByUserIdAndDateBetweenOrderByDateDescCreatedAtDesc(userId, from, to)
                 : repo.findByUserIdAndKindAndDateBetweenOrderByDateDescCreatedAtDesc(userId, kind, from, to);

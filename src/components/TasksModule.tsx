@@ -1,6 +1,5 @@
 import { useState, type FormEvent } from 'react';
 import type { Task, TaskPriority, TaskStatus } from '../types';
-import { newId } from '../lib/storage';
 import { diffDays, formatDM, fromISO, toISO, today } from '../lib/dates';
 
 const STATUS_LABEL: Record<TaskStatus, string> = {
@@ -31,7 +30,10 @@ type Filter = 'activas' | TaskStatus | 'todas';
 
 interface Props {
   tasks: Task[];
-  onChange: (next: Task[]) => void;
+  onCreate: (draft: Omit<Task, 'id'>) => void;
+  onUpdate: (id: string, draft: Omit<Task, 'id'>) => void;
+  onStatus: (id: string, status: TaskStatus) => void;
+  onDelete: (id: string) => void;
 }
 
 function deadlineInfo(task: Task) {
@@ -43,7 +45,7 @@ function deadlineInfo(task: Task) {
   return { text: `Quedan ${days} días`, tone: 'normal' };
 }
 
-export default function TasksModule({ tasks, onChange }: Props) {
+export default function TasksModule({ tasks, onCreate, onUpdate, onStatus, onDelete }: Props) {
   const [draft, setDraft] = useState<Draft>(emptyDraft);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [filter, setFilter] = useState<Filter>('activas');
@@ -52,8 +54,8 @@ export default function TasksModule({ tasks, onChange }: Props) {
     e.preventDefault();
     const clean = { ...draft, name: draft.name.trim(), description: draft.description.trim() };
     if (!clean.name || !clean.deadline) return;
-    if (editingId) onChange(tasks.map((t) => (t.id === editingId ? { ...t, ...clean } : t)));
-    else onChange([...tasks, { id: newId(), ...clean }]);
+    if (editingId) onUpdate(editingId, clean);
+    else onCreate(clean);
     cancel();
   };
 
@@ -69,11 +71,11 @@ export default function TasksModule({ tasks, onChange }: Props) {
 
   const remove = (t: Task) => {
     if (!confirm(`¿Eliminar “${t.name}”?`)) return;
-    onChange(tasks.filter((x) => x.id !== t.id));
+    onDelete(t.id);
     if (editingId === t.id) cancel();
   };
 
-  const setStatus = (t: Task, status: TaskStatus) => onChange(tasks.map((x) => (x.id === t.id ? { ...x, status } : x)));
+  const setStatus = (t: Task, status: TaskStatus) => onStatus(t.id, status);
 
   const visible = tasks
     .filter((t) =>
