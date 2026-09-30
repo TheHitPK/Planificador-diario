@@ -1,0 +1,44 @@
+spring:
+  application:
+    name: planificacion-api
+  profiles:
+    default: dev
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5433}/${DB_NAME:planificacion}
+    username: ${DB_USER:planificacion}
+    password: ${DB_PASSWORD:planificacion}
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate   # El esquema lo gestiona Flyway, Hibernate solo lo valida
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+  flyway:
+    locations: classpath:db/migration
+  mvc:
+    problemdetails:
+      enabled: true
+
+server:
+  port: ${PORT:8080}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+app:
+  jwt:
+    # Clave HMAC en Base64 (mínimo 32 bytes). Obligatoria fuera del perfil dev.
+    secret: ${JWT_SECRET}
+    issuer: planificacion-api
+    access-token-ttl: 15m
+    refresh-token-ttl: 30d
+  cors:
+    allowed-origins:
+      - http://localhost:5173
+  rates:
+    base-url: https://ve.dolarapi.com

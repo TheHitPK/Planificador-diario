@@ -1,0 +1,186 @@
+# Peticiones de prueba. En VS Code: extensión "REST Client" (humao.rest-client) → clic en "Send Request".
+# En IntelliJ funciona sin extensión.
+# Orden sugerido: 1) login  2) el resto usa el token automáticamente.
+
+@base = http://localhost:8080/api
+@today = 2026-09-30
+
+### ─────────────────────────────── Auth ───────────────────────────────
+
+### Registro
+POST {{base}}/auth/register
+Content-Type: application/json
+
+{ "email": "yo@ejemplo.com", "password": "cambia-esto-123", "fullName": "Mi Nombre" }
+
+### Login (guarda el token para las siguientes peticiones)
+# @name login
+POST {{base}}/auth/login
+Content-Type: application/json
+
+{ "email": "demo@planificacion.dev", "password": "demo12345" }
+
+@token = {{login.response.body.accessToken}}
+@refresh = {{login.response.body.refreshToken}}
+
+### Renovar el access token (el refresh token anterior queda invalidado)
+POST {{base}}/auth/refresh
+Content-Type: application/json
+
+{ "refreshToken": "{{refresh}}" }
+
+### Cerrar sesión
+POST {{base}}/auth/logout
+Content-Type: application/json
+
+{ "refreshToken": "{{refresh}}" }
+
+### Mi usuario
+GET {{base}}/users/me
+Authorization: Bearer {{token}}
+
+### ──────────────────────── Disciplinas y planificación ────────────────────────
+
+### Listar disciplinas
+GET {{base}}/disciplines
+Authorization: Bearer {{token}}
+
+### Crear disciplina
+# @name disciplina
+POST {{base}}/disciplines
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{ "name": "Beber 2 L de agua", "icon": "💧", "description": "Tomar 2 litros durante el día" }
+
+### Marcar como cumplida hoy
+PUT {{base}}/planning/{{today}}/disciplines/{{disciplina.response.body.id}}
+Authorization: Bearer {{token}}
+
+### Desmarcar
+DELETE {{base}}/planning/{{today}}/disciplines/{{disciplina.response.body.id}}
+Authorization: Bearer {{token}}
+
+### Semana (lunes a domingo) con semáforo por día
+GET {{base}}/planning?from=2026-09-28&to=2026-10-04
+Authorization: Bearer {{token}}
+
+### ─────────────────────────────── Pendientes ───────────────────────────────
+
+### Crear pendiente
+# @name tarea
+POST {{base}}/tasks
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{ "name": "Reparar la licuadora", "description": "Cambiar cuchillas", "priority": "HIGH", "deadline": "2026-10-05" }
+
+### Activos (pendientes + en progreso)
+GET {{base}}/tasks
+Authorization: Bearer {{token}}
+
+### Completados
+GET {{base}}/tasks?status=COMPLETED
+Authorization: Bearer {{token}}
+
+### Cambiar estado
+PATCH {{base}}/tasks/{{tarea.response.body.id}}/status
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{ "status": "IN_PROGRESS" }
+
+### ─────────────────────────────── Finanzas ───────────────────────────────
+
+### Actualizar tasa BCV
+POST {{base}}/finance/rates/refresh
+Authorization: Bearer {{token}}
+
+### Tasa vigente
+GET {{base}}/finance/rates
+Authorization: Bearer {{token}}
+
+### Entrada
+POST {{base}}/finance/movements
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{ "kind": "INCOME", "date": "{{today}}", "account": "ZELLE", "amount": 500, "incomeType": "SALARY", "description": "Quincena" }
+
+### Salida (gasto)
+POST {{base}}/finance/movements
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{ "kind": "EXPENSE", "date": "{{today}}", "account": "PAGO_MOVIL", "amount": 20000,
+  "expenseReason": "PURCHASE", "expenseClass": "EXPENSE", "category": "Comida", "description": "Mercado" }
+
+### Venta de divisas: $100 Zelle → Bs Pago Móvil
+POST {{base}}/finance/exchanges
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{ "date": "{{today}}", "reason": "CURRENCY_SALE", "fromAccount": "ZELLE", "fromAmount": 100,
+  "toAccount": "PAGO_MOVIL", "toAmount": 86000 }
+
+### Compra de USDT con bolívares (la tasa de compra se calcula sola)
+POST {{base}}/finance/exchanges
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{ "date": "{{today}}", "reason": "EXCHANGE", "fromAccount": "PAGO_MOVIL", "fromAmount": 30000,
+  "toAccount": "USDT", "toAmount": 33 }
+
+### Movimientos del mes
+GET {{base}}/finance/movements?month=2026-09
+Authorization: Bearer {{token}}
+
+### Resumen: saldos, totales en $/Bs/€, mes y últimos 6 meses
+GET {{base}}/finance/summary
+Authorization: Bearer {{token}}
+
+### ─────────────────────────────── Nutrición ───────────────────────────────
+
+### Buscar alimentos (catálogo + propios)
+GET {{base}}/nutrition/foods?q=pollo
+Authorization: Bearer {{token}}
+
+### Registrar comida desde un alimento (usa el id de la búsqueda)
+POST {{base}}/nutrition/diary/entries
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{ "date": "{{today}}", "meal": "LUNCH", "foodId": "PEGA-AQUI-EL-ID", "amount": 200 }
+
+### Registro rápido
+POST {{base}}/nutrition/diary/entries
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{ "date": "{{today}}", "meal": "SNACK", "name": "Empanada de queso", "protein": 8, "carbs": 30, "fat": 12 }
+
+### Diario del día con % de cada macro
+GET {{base}}/nutrition/diary?date={{today}}
+Authorization: Bearer {{token}}
+
+### Peso y % de grasa
+PUT {{base}}/nutrition/body
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{ "date": "{{today}}", "weightKg": 78.4, "bodyFatPct": 18.6, "waistCm": 85 }
+
+### Perfil
+PUT {{base}}/nutrition/profile
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{ "sex": "MALE", "birthDate": "1999-05-10", "heightCm": 176, "activityLevel": "MODERATE", "goal": "RECOMPOSITION" }
+
+### Plan recomendado
+GET {{base}}/nutrition/plan
+Authorization: Bearer {{token}}
+
+### Aplicar el plan como objetivos
+POST {{base}}/nutrition/plan/apply
+Authorization: Bearer {{token}}

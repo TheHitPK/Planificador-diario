@@ -19,3 +19,8 @@ npm run build    # genera /dist
 - **Nutrición**: diario de comidas con calorías, proteínas, carbohidratos, grasas y fibra frente a tus objetivos; lista de alimentos editable; registro de peso, % de grasa y cintura con gráficos; cálculo de objetivos (Katch-McArdle o Mifflin-St Jeor según tu actividad y meta).
 
 > Los datos viven en el navegador: si borras los datos del sitio o cambias de navegador, se pierden.
+
+## Backend
+
+En [`backend/`](backend/) hay una API REST en Spring Boot + PostgreSQL con login JWT que modela todos los módulos.
+El frontend todavía no está conectado a ella. Ver [backend/README.md](backend/README.md).
