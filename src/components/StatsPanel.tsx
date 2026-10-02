@@ -9,10 +9,10 @@ import LevelPill from './LevelPill';
 
 /** Colores de estado (iguales en claro y oscuro). */
 const LEVEL_COLOR: Record<Level, string> = {
-  green: '#0ca30c',
-  yellow: '#fab219',
-  red: '#d03b3b',
-  none: '#898781',
+  green: '#17a34a',
+  yellow: '#f5a524',
+  red: '#e5484d',
+  none: '#8a9a97',
 };
 
 interface Props {

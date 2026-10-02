@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useRef, useState, type ReactNode } from 'react';
+import { AlertIcon, CheckCircleIcon } from './Icons';
 
 type Tone = 'ok' | 'error';
 interface Toast {
@@ -26,7 +27,8 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       <div className="toasts" role="status" aria-live="polite">
         {toasts.map((t) => (
           <div key={t.id} className={`toast toast-${t.tone}`}>
-            <span aria-hidden>{t.tone === 'error' ? '⚠' : '✓'}</span> {t.text}
+            {t.tone === 'error' ? <AlertIcon /> : <CheckCircleIcon />}
+            <span>{t.text}</span>
           </div>
         ))}
       </div>

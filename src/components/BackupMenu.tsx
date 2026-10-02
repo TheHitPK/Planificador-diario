@@ -1,5 +1,6 @@
 import { useRef, useState, type ChangeEvent } from 'react';
 import { exportBackup, parseBackup, type BackupData } from '../lib/backup';
+import { DownloadIcon, UploadIcon } from './Icons';
 
 interface Props {
   data: BackupData;
@@ -43,14 +44,16 @@ export default function BackupMenu({ data, onImport }: Props) {
   return (
     <div className="backup">
       <button className="btn ghost small" onClick={handleExport} title="Descargar todos tus datos en un archivo .json">
-        ⬇ Exportar
+        <DownloadIcon size={15} />
+        Exportar
       </button>
       <button
         className="btn ghost small"
         onClick={() => fileRef.current?.click()}
         title="Subir un respaldo .json a tu cuenta (solo si está vacía)"
       >
-        ⬆ Importar
+        <UploadIcon size={15} />
+        Importar
       </button>
       <input ref={fileRef} type="file" accept="application/json,.json" hidden onChange={handleFile} />
       {notice && (

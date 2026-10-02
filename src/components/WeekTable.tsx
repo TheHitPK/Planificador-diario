@@ -3,6 +3,7 @@ import type { Activity, Checks } from '../types';
 import { DAY_NAMES, MONTH_NAMES, addDays, formatDM, range, startOfWeek, toISO, today } from '../lib/dates';
 import { doneOn, levelFor } from '../lib/stats';
 import LevelPill from './LevelPill';
+import { ChevronLeftIcon, ChevronRightIcon } from './Icons';
 
 interface Props {
   activities: Activity[];
@@ -41,13 +42,13 @@ export default function WeekTable({ activities, checks, onToggle, onRangeNeeded 
         </div>
         <div className="week-nav">
           <button className="btn ghost" onClick={() => setWeekStart(addDays(weekStart, -7))} aria-label="Semana anterior">
-            ‹
+            <ChevronLeftIcon />
           </button>
           <button className="btn ghost" onClick={() => setWeekStart(startOfWeek(todayDate))} disabled={isCurrentWeek}>
             Hoy
           </button>
           <button className="btn ghost" onClick={() => setWeekStart(addDays(weekStart, 7))} aria-label="Semana siguiente">
-            ›
+            <ChevronRightIcon />
           </button>
         </div>
       </div>
