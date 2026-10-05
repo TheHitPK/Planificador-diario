@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { motion, useMotionValueEvent, useScroll } from 'motion/react';
 import { useLocalStorage } from './lib/storage';
 import { useAuth } from './api/AuthContext';
 import type { ApiUser } from './api/client';
@@ -20,9 +21,9 @@ import NutritionModule from './nutrition/NutritionModule';
 import Backdrop from './components/Backdrop';
 import PageHero, { greetingFor, type HeroStat } from './components/PageHero';
 import { AppleIcon, CalendarCheckIcon, ListChecksIcon, LogOutIcon, Logo, TargetIcon, WalletIcon } from './components/Icons';
-import { useScrollChrome, useScrollReveal, useSpotlight } from './lib/motion';
 import { doneOn } from './lib/stats';
 import { today } from './lib/dates';
+import { Button, Card, cn } from './ui';
 
 type Tab = 'plan' | 'actividades' | 'pendientes' | 'finanzas' | 'nutricion';
 
@@ -33,23 +34,25 @@ interface TabDef {
   icon: ReactNode;
   title: string;
   subtitle: string;
+  /** Módulo que las cuentas de empresa no tienen. */
+  personalOnly?: boolean;
 }
 
 const TABS: TabDef[] = [
   { id: 'plan', label: 'Plan', icon: <CalendarCheckIcon />, title: 'Planificación diaria', subtitle: 'Marca tus disciplinas y mira cómo va tu semana.' },
   { id: 'actividades', label: 'Disciplinas', icon: <TargetIcon />, title: 'Mis disciplinas', subtitle: 'Los hábitos que quieres sostener cada día.' },
   { id: 'pendientes', label: 'Pendientes', icon: <ListChecksIcon />, title: 'Pendientes', subtitle: 'Tus tareas, con prioridad y fecha límite.' },
-  { id: 'finanzas', label: 'Finanzas', icon: <WalletIcon />, title: 'Finanzas', subtitle: 'Tus cuentas y movimientos, de un vistazo.' },
-  { id: 'nutricion', label: 'Nutrición', icon: <AppleIcon />, title: 'Nutrición', subtitle: 'Diario de comidas, macros y progreso corporal.' },
+  { id: 'finanzas', label: 'Finanzas', icon: <WalletIcon />, title: 'Finanzas', subtitle: 'Tus cuentas y movimientos, de un vistazo.', personalOnly: true },
+  { id: 'nutricion', label: 'Nutrición', icon: <AppleIcon />, title: 'Nutrición', subtitle: 'Diario de comidas, macros y progreso corporal.', personalOnly: true },
 ];
 
 export default function App() {
   const { state } = useAuth();
   if (state.status === 'loading')
     return (
-      <div className="splash">
+      <div className="relative isolate flex min-h-dvh flex-col items-center justify-center gap-3.5 font-medium text-ink-2">
         <Backdrop />
-        <Logo size={56} />
+        <Logo size={56} className="animate-pulse-soft" />
         <span>Cargando…</span>
       </div>
     );
@@ -60,9 +63,17 @@ export default function App() {
 
 type LoadState = { status: 'loading' } | { status: 'ready' } | { status: 'error'; message: string };
 
+const SKELETON =
+  'animate-shimmer rounded-card border border-line bg-[linear-gradient(100deg,var(--surface)_30%,var(--surface-2)_50%,var(--surface)_70%)] [background-size:200%_100%]';
+
 function Dashboard({ user }: { user: ApiUser }) {
   const { logout } = useAuth();
-  const [tab, setTab] = useLocalStorage<Tab>('pd.tab', 'plan');
+  const isBusiness = user.accountType === 'BUSINESS';
+  const tabs = useMemo(() => TABS.filter((t) => !(isBusiness && t.personalOnly)), [isBusiness]);
+  const [storedTab, setTab] = useLocalStorage<Tab>('pd.tab', 'plan');
+  // La pestaña guardada puede ser de un módulo que esta cuenta no tiene.
+  const current = tabs.find((t) => t.id === storedTab) ?? tabs[0];
+  const tab = current.id;
   const planning = usePlanningStore();
   const tasks = useTasksStore();
   const finance = useFinanceStore();
@@ -74,8 +85,9 @@ function Dashboard({ user }: { user: ApiUser }) {
   const { load: loadFinance } = finance;
   const { load: loadNutrition } = nutrition;
   const loadAll = useCallback(async () => {
-    await Promise.all([loadPlanning(), loadTasks(), loadFinance(), loadNutrition()]);
-  }, [loadPlanning, loadTasks, loadFinance, loadNutrition]);
+    // La API rechaza finanzas y nutrición a las cuentas de empresa: no se piden.
+    await Promise.all([loadPlanning(), loadTasks(), ...(isBusiness ? [] : [loadFinance(), loadNutrition()])]);
+  }, [loadPlanning, loadTasks, loadFinance, loadNutrition, isBusiness]);
 
   useEffect(() => {
     loadAll()
@@ -99,105 +111,129 @@ function Dashboard({ user }: { user: ApiUser }) {
       checks: planning.checks,
       tasks: tasks.tasks,
       startISO: planning.startISO,
-      finance: finance.data,
-      nutrition: nutrition.data,
+      ...(isBusiness ? {} : { finance: finance.data, nutrition: nutrition.data }),
     }),
-    [planning.activities, planning.checks, planning.startISO, tasks.tasks, finance.data, nutrition.data],
+    [planning.activities, planning.checks, planning.startISO, tasks.tasks, finance.data, nutrition.data, isBusiness],
   );
 
   const pendingCount = tasks.tasks.filter((t) => t.status !== 'completada').length;
 
-  const appRef = useRef<HTMLDivElement>(null);
-  const topbarRef = useRef<HTMLElement>(null);
-  const navRef = useRef<HTMLElement>(null);
-  useScrollReveal(appRef);
-  useSpotlight(appRef);
-  useScrollChrome(topbarRef);
+  // La barra superior gana fondo al dejar el tope y muestra el avance del scroll.
+  const { scrollY, scrollYProgress } = useScroll();
+  const [scrolled, setScrolled] = useState(false);
+  useMotionValueEvent(scrollY, 'change', (y) => setScrolled(y > 8));
 
-  // El indicador de la pestaña activa se desliza hasta su posición.
-  useLayoutEffect(() => {
-    const nav = navRef.current;
-    if (!nav) return;
-    const place = () => {
-      const active = nav.querySelector<HTMLElement>('.tab.active');
-      if (!active) return;
-      nav.style.setProperty('--ind-x', `${active.offsetLeft}px`);
-      nav.style.setProperty('--ind-w', `${active.offsetWidth}px`);
-    };
-    place();
-    const ro = new ResizeObserver(place);
-    ro.observe(nav);
-    nav.querySelectorAll('.tab').forEach((t) => ro.observe(t));
-    return () => ro.disconnect();
-  }, [tab]);
-
-  const current = TABS.find((t) => t.id === tab) ?? TABS[0];
   const doneToday = doneOn(planning.checks, today(), planning.activities);
   const heroStats: HeroStat[] = [
     { label: 'Hechas hoy', value: doneToday, suffix: `/${planning.activities.length}` },
     { label: 'Pendientes', value: pendingCount },
     { label: 'Disciplinas', value: planning.activities.length },
   ];
-  const firstName = user.fullName.trim().split(/\s+/)[0];
+  // A una persona se la saluda por su primer nombre; a una empresa, por el nombre completo.
+  const greetName = isBusiness ? user.fullName.trim() : user.fullName.trim().split(/\s+/)[0];
 
   return (
-    <div className="app" ref={appRef}>
+    <div className="relative isolate min-h-dvh">
       <Backdrop />
-      <header className="topbar" ref={topbarRef}>
-        <div className="brand">
+      <header className="sticky top-0 z-40 flex flex-wrap items-center justify-between gap-x-4 gap-y-3 px-4 py-3 sm:px-6">
+        {/* El desenfoque va en una capa aparte: en la propia barra atraparía a la navegación fija del móvil. */}
+        <span
+          aria-hidden="true"
+          className={cn(
+            'absolute inset-0 -z-10 border-b backdrop-blur-lg backdrop-saturate-150 transition-[background-color,border-color,box-shadow] duration-300',
+            scrolled ? 'border-line bg-surface/85 shadow-[0_12px_30px_-22px_rgba(11,27,28,0.5)]' : 'border-transparent bg-page/70',
+          )}
+        />
+        <motion.span
+          aria-hidden="true"
+          className="absolute inset-x-0 bottom-0 h-0.5 origin-left bg-linear-to-r from-brand-to via-dawn-400 via-60% to-coral-500"
+          style={{ scaleX: scrollYProgress }}
+        />
+
+        <div className="flex items-center gap-2.5 font-display text-[17px] font-extrabold tracking-[-0.02em]">
           <Logo />
           <span>Planificación diaria</span>
         </div>
-        <nav className="tabs" aria-label="Módulos" ref={navRef}>
-          <span className="tab-indicator" aria-hidden="true" />
-          {TABS.map((t) => (
-            <button
-              key={t.id}
-              className={`tab ${tab === t.id ? 'active' : ''}`}
-              onClick={() => setTab(t.id)}
-              aria-current={tab === t.id ? 'page' : undefined}
-            >
-              {t.icon}
-              <span>{t.label}</span>
-              {t.id === 'pendientes' && pendingCount > 0 && <span className="badge">{pendingCount}</span>}
-            </button>
-          ))}
+
+        {/* En móvil es una barra fija inferior; desde md vuelve a la cabecera. */}
+        <nav
+          aria-label="Módulos"
+          className={cn(
+            'fixed inset-x-3 bottom-[calc(12px+env(safe-area-inset-bottom))] z-40 flex gap-0.5 rounded-[22px] border border-line bg-surface/92 p-1.5 shadow-lift backdrop-blur-lg',
+            'md:static md:rounded-[14px] md:bg-surface-2/80 md:p-1 md:shadow-none md:backdrop-blur-none',
+          )}
+        >
+          {tabs.map((t) => {
+            const active = tab === t.id;
+            return (
+              <button
+                key={t.id}
+                onClick={() => setTab(t.id)}
+                aria-current={active ? 'page' : undefined}
+                className={cn(
+                  'relative isolate flex min-h-[54px] min-w-0 flex-1 touch-manipulation flex-col items-center justify-center gap-[3px] rounded-2xl px-0.5 py-2',
+                  'text-[11px] font-semibold whitespace-nowrap transition-colors duration-150',
+                  'md:min-h-[38px] md:flex-none md:flex-row md:gap-[7px] md:rounded-ctl md:px-3.5 md:text-[15px]',
+                  active ? 'text-accent-text md:text-ink' : 'text-ink-2 hover:text-ink',
+                )}
+              >
+                {active && (
+                  <motion.span
+                    layoutId="tab-indicator"
+                    aria-hidden="true"
+                    className="absolute inset-0 -z-10 rounded-[inherit] bg-accent/10 md:bg-surface md:shadow-[0_1px_2px_rgba(11,27,28,0.1),0_6px_14px_-8px_rgba(11,27,28,0.3)]"
+                    transition={{ type: 'spring', stiffness: 420, damping: 34 }}
+                  />
+                )}
+                <span className={cn('flex transition-colors duration-150', active && 'text-accent')}>{t.icon}</span>
+                <span>{t.label}</span>
+                {t.id === 'pendientes' && pendingCount > 0 && (
+                  <span className="absolute top-[3px] left-[calc(50%+6px)] rounded-full bg-accent px-1.5 text-[11px] font-bold text-accent-ink tabular-nums md:static md:px-[7px] md:py-px">
+                    {pendingCount}
+                  </span>
+                )}
+              </button>
+            );
+          })}
         </nav>
-        <div className="topbar-right">
+
+        <div className="flex flex-wrap items-center gap-3">
           <BackupMenu data={backupData} onImport={importBackup} />
-          <div className="user-menu">
-            <span className="user-name" title={user.email}>
+          <div className="flex items-center gap-2 md:border-l md:border-line md:pl-3">
+            <span className="hidden max-w-40 truncate text-[13px] font-semibold md:inline" title={user.email}>
               {user.fullName}
             </span>
-            <button className="btn ghost small" onClick={() => void logout()}>
+            <Button variant="ghost" size="sm" onClick={() => void logout()}>
               <LogOutIcon size={15} />
               Salir
-            </button>
+            </Button>
           </div>
         </div>
       </header>
 
-      <main className="content">
+      <main className="mx-auto flex max-w-[1240px] flex-col gap-6 px-4 pt-6 pb-[calc(104px+env(safe-area-inset-bottom))] *:min-w-0 sm:px-6 md:pb-6">
         <PageHero
           id={tab}
-          title={tab === 'plan' && firstName ? `${greetingFor()}, ${firstName}` : current.title}
+          title={tab === 'plan' && greetName ? `${greetingFor()}, ${greetName}` : current.title}
           subtitle={current.subtitle}
           stats={heroStats}
         />
         {load.status === 'loading' && (
-          <div className="skeletons" role="status" aria-label="Cargando tus datos">
-            <div className="skeleton tall" />
-            <div className="skeleton" />
-            <div className="skeleton" />
+          <div className="flex flex-col gap-6" role="status" aria-label="Cargando tus datos">
+            <div className={cn(SKELETON, 'h-[340px]')} />
+            <div className={cn(SKELETON, 'h-[150px]')} />
+            <div className={cn(SKELETON, 'h-[150px]')} />
           </div>
         )}
         {load.status === 'error' && (
-          <section className="card">
-            <p className="form-error">No se pudieron cargar tus datos: {load.message}</p>
-            <button className="btn primary" onClick={() => window.location.reload()}>
+          <Card className="flex flex-col items-start gap-3">
+            <p role="alert" className="text-[13px] font-semibold text-bad-ink">
+              No se pudieron cargar tus datos: {load.message}
+            </p>
+            <Button variant="primary" onClick={() => window.location.reload()}>
               Reintentar
-            </button>
-          </section>
+            </Button>
+          </Card>
         )}
         {load.status === 'ready' && (
           <>

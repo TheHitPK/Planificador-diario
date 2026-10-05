@@ -2,6 +2,11 @@ import { useState, type FormEvent } from 'react';
 import type { Food, FoodUnit } from './types';
 import { fmt1, kcalFromMacros } from './calc';
 import { parseAmount } from '../finance/calc';
+import { XIcon } from '../components/Icons';
+import {
+  Button, Card, CardHead, CardTitle, ColHead, Field, FieldRow, FormActions, FormError, Hint, Input, Select, Table, Td, Th, Tr,
+  TwoCol, formClass,
+} from '../ui';
 
 interface Props {
   foods: Food[];
@@ -75,125 +80,121 @@ export default function FoodsPage({ foods, onSave, onDelete }: Props) {
     .sort((a, b) => a.name.localeCompare(b.name));
 
   return (
-    <div className="two-col">
-      <section className="card">
-        <h2>{editingId ? 'Editar alimento' : 'Nuevo alimento'}</h2>
-        <form className="form" onSubmit={save}>
-          <label className="field">
-            <span>Nombre</span>
-            <input className="input" {...field('name')} placeholder="Ej. Pan árabe integral" />
-          </label>
-          <div className="field-row">
-            <label className="field">
-              <span>Valores por</span>
-              <input className="input" inputMode="decimal" {...field('per')} />
-            </label>
-            <label className="field">
-              <span>Unidad</span>
-              <select className="input" value={draft.unit} onChange={(e) => setDraft({ ...draft, unit: e.target.value as FoodUnit })}>
+    <TwoCol>
+      <Card>
+        <CardTitle>{editingId ? 'Editar alimento' : 'Nuevo alimento'}</CardTitle>
+        <form className={formClass} onSubmit={save}>
+          <Field label="Nombre">
+            <Input {...field('name')} placeholder="Ej. Pan árabe integral" />
+          </Field>
+          <FieldRow>
+            <Field label="Valores por">
+              <Input inputMode="decimal" {...field('per')} />
+            </Field>
+            <Field label="Unidad">
+              <Select value={draft.unit} onChange={(e) => setDraft({ ...draft, unit: e.target.value as FoodUnit })}>
                 {(Object.keys(UNIT_LABEL) as FoodUnit[]).map((u) => (
                   <option key={u} value={u}>
                     {UNIT_LABEL[u]}
                   </option>
                 ))}
-              </select>
-            </label>
-          </div>
-          <div className="field-row">
-            <label className="field">
-              <span>Proteína (g)</span>
-              <input className="input" inputMode="decimal" {...field('protein')} />
-            </label>
-            <label className="field">
-              <span>Carbos (g)</span>
-              <input className="input" inputMode="decimal" {...field('carbs')} />
-            </label>
-            <label className="field">
-              <span>Grasa (g)</span>
-              <input className="input" inputMode="decimal" {...field('fat')} />
-            </label>
-          </div>
-          <div className="field-row">
-            <label className="field">
-              <span>Calorías</span>
-              <input className="input" inputMode="decimal" {...field('kcal')} placeholder={`${autoKcal} (auto)`} />
-            </label>
-            <label className="field">
-              <span>Fibra (g)</span>
-              <input className="input" inputMode="decimal" {...field('fiber')} />
-            </label>
-          </div>
-          <span className="hint">Copia los valores de la etiqueta nutricional. Si dejas las calorías vacías se calculan de los macros.</span>
-          {error && <p className="form-error">{error}</p>}
-          <div className="form-actions">
-            <button type="submit" className="btn primary">
+              </Select>
+            </Field>
+          </FieldRow>
+          <FieldRow>
+            <Field label="Proteína (g)">
+              <Input inputMode="decimal" {...field('protein')} />
+            </Field>
+            <Field label="Carbos (g)">
+              <Input inputMode="decimal" {...field('carbs')} />
+            </Field>
+            <Field label="Grasa (g)">
+              <Input inputMode="decimal" {...field('fat')} />
+            </Field>
+          </FieldRow>
+          <FieldRow>
+            <Field label="Calorías">
+              <Input inputMode="decimal" {...field('kcal')} placeholder={`${autoKcal} (auto)`} />
+            </Field>
+            <Field label="Fibra (g)">
+              <Input inputMode="decimal" {...field('fiber')} />
+            </Field>
+          </FieldRow>
+          <Hint>Copia los valores de la etiqueta nutricional. Si dejas las calorías vacías se calculan de los macros.</Hint>
+          {error && <FormError>{error}</FormError>}
+          <FormActions>
+            <Button type="submit" variant="primary">
               {editingId ? 'Guardar cambios' : 'Agregar'}
-            </button>
+            </Button>
             {editingId && (
-              <button type="button" className="btn ghost" onClick={cancel}>
+              <Button variant="ghost" onClick={cancel}>
                 Cancelar
-              </button>
+              </Button>
             )}
-          </div>
+          </FormActions>
         </form>
-      </section>
+      </Card>
 
-      <section className="card">
-        <div className="card-head">
+      <Card delay={0.08}>
+        <CardHead>
           <h2>Mis alimentos ({foods.length})</h2>
-          <input className="input search" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar…" />
-        </div>
-        <div className="table-wrap">
-          <table className="grid foods-table">
-            <thead>
-              <tr>
-                <th className="col-day">Alimento</th>
-                <th>Porción</th>
-                <th>kcal</th>
-                <th>Prot.</th>
-                <th>Carbos</th>
-                <th>Grasa</th>
-                <th>Fibra</th>
-                <th />
-              </tr>
-            </thead>
-            <tbody>
-              {visible.map((f) => (
-                <tr key={f.id} className={editingId === f.id ? 'is-today' : ''}>
-                  <th scope="row" className="col-day">
-                    {f.name}
-                  </th>
-                  <td>
-                    {fmt1(f.per)} {f.unit === 'unidad' ? 'u' : f.unit}
-                  </td>
-                  <td>{fmt1(f.kcal)}</td>
-                  <td>{fmt1(f.protein)}</td>
-                  <td>{fmt1(f.carbs)}</td>
-                  <td>{fmt1(f.fat)}</td>
-                  <td>{fmt1(f.fiber)}</td>
-                  <td className="row-actions">
-                    {f.global ? (
-                      <span className="muted small" title="Catálogo compartido: crea uno propio para ajustar los valores">
-                        Catálogo
-                      </span>
-                    ) : (
-                      <>
-                        <button className="btn ghost small" onClick={() => edit(f)}>
-                          Editar
-                        </button>
-                        <button className="btn danger small" onClick={() => remove(f)}>
-                          ✕
-                        </button>
-                      </>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        <p className="muted small note">Valores iniciales aproximados. Ajústalos a las marcas que compras.</p>
-      </section>
-    </div>
+          <Input
+            className="sm:w-[200px]"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Buscar…"
+            aria-label="Buscar alimento"
+          />
+        </CardHead>
+        <Table compact>
+          <thead>
+            <tr>
+              <ColHead align="left">Alimento</ColHead>
+              <ColHead>Porción</ColHead>
+              <ColHead>kcal</ColHead>
+              <ColHead>Prot.</ColHead>
+              <ColHead>Carbos</ColHead>
+              <ColHead>Grasa</ColHead>
+              <ColHead>Fibra</ColHead>
+              <ColHead />
+            </tr>
+          </thead>
+          <tbody>
+            {visible.map((f) => (
+              <Tr key={f.id} highlight={editingId === f.id}>
+                <Th scope="row" align="left" className="font-semibold">
+                  {f.name}
+                </Th>
+                <Td>
+                  {fmt1(f.per)} {f.unit === 'unidad' ? 'u' : f.unit}
+                </Td>
+                <Td>{fmt1(f.kcal)}</Td>
+                <Td>{fmt1(f.protein)}</Td>
+                <Td>{fmt1(f.carbs)}</Td>
+                <Td>{fmt1(f.fat)}</Td>
+                <Td>{fmt1(f.fiber)}</Td>
+                <Td align="right" className="whitespace-nowrap">
+                  {f.global ? (
+                    <span className="text-[13px] text-ink-2" title="Catálogo compartido: crea uno propio para ajustar los valores">
+                      Catálogo
+                    </span>
+                  ) : (
+                    <span className="inline-flex gap-1">
+                      <Button variant="ghost" size="sm" onClick={() => edit(f)}>
+                        Editar
+                      </Button>
+                      <Button variant="danger" size="sm" onClick={() => remove(f)} aria-label={`Eliminar ${f.name}`}>
+                        <XIcon size={14} />
+                      </Button>
+                    </span>
+                  )}
+                </Td>
+              </Tr>
+            ))}
+          </tbody>
+        </Table>
+        <p className="mt-3.5 text-[13px] text-ink-2">Valores iniciales aproximados. Ajústalos a las marcas que compras.</p>
+      </Card>
+    </TwoCol>
   );
 }

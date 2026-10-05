@@ -1,9 +1,17 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { useLocalStorage } from '../lib/storage';
 import type { FinanceData, Movement, Rates } from './types';
 import { toISO, today } from '../lib/dates';
 import FinanceSummary from './FinanceSummary';
 import MovementsPage from './MovementsPage';
+import { ArrowDownIcon, ArrowUpIcon, BarChartIcon } from '../components/Icons';
+import { Chip, Stack } from '../ui';
+
+const SUBTABS: [SubTab, string, ReactNode][] = [
+  ['resumen', 'Resumen', <BarChartIcon size={16} />],
+  ['entrada', 'Entradas', <ArrowDownIcon size={16} />],
+  ['salida', 'Salidas', <ArrowUpIcon size={16} />],
+];
 
 type SubTab = 'resumen' | 'entrada' | 'salida';
 
@@ -43,24 +51,13 @@ export default function FinanceModule({ data, onAdd, onUpdate, onDelete, onRefre
   const pageProps = { data, onAdd, onUpdate, onDelete };
 
   return (
-    <div className="finance">
-      <div className="subtabs" role="tablist">
-        {(
-          [
-            ['resumen', '📊 Resumen'],
-            ['entrada', '⬇ Entradas'],
-            ['salida', '⬆ Salidas'],
-          ] as [SubTab, string][]
-        ).map(([id, label]) => (
-          <button
-            key={id}
-            role="tab"
-            aria-selected={tab === id}
-            className={`chip big ${tab === id ? 'active' : ''}`}
-            onClick={() => setTab(id)}
-          >
+    <Stack>
+      <div className="flex flex-wrap gap-2" role="tablist">
+        {SUBTABS.map(([id, label, icon]) => (
+          <Chip key={id} big role="tab" aria-selected={tab === id} active={tab === id} onClick={() => setTab(id)}>
+            {icon}
             {label}
-          </button>
+          </Chip>
         ))}
       </div>
 
@@ -69,6 +66,6 @@ export default function FinanceModule({ data, onAdd, onUpdate, onDelete, onRefre
       )}
       {tab === 'entrada' && <MovementsPage kind="entrada" {...pageProps} />}
       {tab === 'salida' && <MovementsPage kind="salida" {...pageProps} />}
-    </div>
+    </Stack>
   );
 }

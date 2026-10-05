@@ -4,6 +4,11 @@ import type { BodyEntry, Profile } from './types';
 import { bmi, bmiLabel, fmt1 } from './calc';
 import { parseAmount } from '../finance/calc';
 import { formatDM, fromISO, toISO, today } from '../lib/dates';
+import { XIcon } from '../components/Icons';
+import {
+  Button, Card, CardTitle, ChartFrame, ChartTip, ColHead, Empty, Field, FieldRow, FormActions, FormError, Grid2, Hint, Input,
+  Stack, Table, Td, Th, Tr, TwoCol, chart, cn, formClass,
+} from '../ui';
 
 interface Props {
   body: BodyEntry[];
@@ -63,13 +68,13 @@ export default function BodyPage({ body, profile, onSave, onDelete }: Props) {
   const dF = lastFat && firstFat && lastFat !== firstFat ? delta(lastFat.bodyFat, firstFat.bodyFat) : null;
 
   return (
-    <div className="nutri">
-      <section className="card">
-        <h2>Cómo estoy</h2>
+    <Stack>
+      <Card>
+        <CardTitle>Cómo estoy</CardTitle>
         {!last ? (
-          <p className="muted">Registra tu peso para ver tu progreso.</p>
+          <p className="text-ink-2">Registra tu peso para ver tu progreso.</p>
         ) : (
-          <div className="body-stats">
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
             <Stat label="Peso" value={`${fmt1(last.weight)} kg`} delta={dW} unit="kg" sub={`desde ${formatDM(fromISO(first!.date))}`} />
             <Stat
               label="% de grasa"
@@ -91,168 +96,161 @@ export default function BodyPage({ body, profile, onSave, onDelete }: Props) {
             />
           </div>
         )}
-      </section>
+      </Card>
 
-      <div className="two-col">
-        <section className="card">
-          <h2>Nuevo registro</h2>
-          <form className="form" onSubmit={save}>
-            <label className="field">
-              <span>Fecha</span>
-              <input type="date" className="input" value={date} onChange={(e) => setDate(e.target.value)} required />
-            </label>
-            <label className="field">
-              <span>Peso (kg)</span>
-              <input className="input amount-input" inputMode="decimal" value={weight} onChange={(e) => setWeight(e.target.value)} placeholder="Ej. 78,4" />
-            </label>
-            <div className="field-row">
-              <label className="field">
-                <span>% de grasa</span>
-                <input className="input" inputMode="decimal" value={bodyFat} onChange={(e) => setBodyFat(e.target.value)} placeholder="Opcional" />
-              </label>
-              <label className="field">
-                <span>Cintura (cm)</span>
-                <input className="input" inputMode="decimal" value={waist} onChange={(e) => setWaist(e.target.value)} placeholder="Opcional" />
-              </label>
-            </div>
-            <label className="field">
-              <span>Nota</span>
-              <input className="input" value={note} onChange={(e) => setNote(e.target.value)} placeholder="Ej. En ayunas, báscula del gym" />
-            </label>
-            <span className="hint">Consejo: pésate en ayunas, a la misma hora y en la misma báscula. Si ya hay un registro ese día, se reemplaza.</span>
-            {error && <p className="form-error">{error}</p>}
-            <div className="form-actions">
-              <button type="submit" className="btn primary">
-                Guardar
-              </button>
-            </div>
+      <TwoCol>
+        <Card>
+          <CardTitle>Nuevo registro</CardTitle>
+          <form className={formClass} onSubmit={save}>
+            <Field label="Fecha">
+              <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} required />
+            </Field>
+            <Field label="Peso (kg)">
+              <Input amount inputMode="decimal" value={weight} onChange={(e) => setWeight(e.target.value)} placeholder="Ej. 78,4" />
+            </Field>
+            <FieldRow>
+              <Field label="% de grasa">
+                <Input inputMode="decimal" value={bodyFat} onChange={(e) => setBodyFat(e.target.value)} placeholder="Opcional" />
+              </Field>
+              <Field label="Cintura (cm)">
+                <Input inputMode="decimal" value={waist} onChange={(e) => setWaist(e.target.value)} placeholder="Opcional" />
+              </Field>
+            </FieldRow>
+            <Field label="Nota">
+              <Input value={note} onChange={(e) => setNote(e.target.value)} placeholder="Ej. En ayunas, báscula del gym" />
+            </Field>
+            <Hint>Consejo: pésate en ayunas, a la misma hora y en la misma báscula. Si ya hay un registro ese día, se reemplaza.</Hint>
+            {error && <FormError>{error}</FormError>}
+            <FormActions>
+              <Button type="submit" variant="primary">
+                Guardar registro
+              </Button>
+            </FormActions>
           </form>
-        </section>
+        </Card>
 
-        <section className="card">
-          <h2>Historial</h2>
+        <Card delay={0.08}>
+          <CardTitle>Historial</CardTitle>
           {sorted.length === 0 ? (
-            <p className="empty">Sin registros todavía.</p>
+            <Empty>Sin registros todavía. Guarda tu peso de hoy para empezar.</Empty>
           ) : (
-            <div className="table-wrap">
-              <table className="grid foods-table">
-                <thead>
-                  <tr>
-                    <th className="col-day">Fecha</th>
-                    <th>Peso</th>
-                    <th>% grasa</th>
-                    <th>Magra</th>
-                    <th>Cintura</th>
-                    <th />
-                  </tr>
-                </thead>
-                <tbody>
-                  {[...sorted].reverse().map((b) => (
-                    <tr key={b.id}>
-                      <th scope="row" className="col-day">
-                        {formatDM(fromISO(b.date))}/{b.date.slice(0, 4)}
-                        {b.note && <div className="muted small">{b.note}</div>}
-                      </th>
-                      <td>{fmt1(b.weight)} kg</td>
-                      <td>{b.bodyFat !== undefined ? `${fmt1(b.bodyFat)} %` : '—'}</td>
-                      <td>{b.bodyFat !== undefined ? `${fmt1(b.weight * (1 - b.bodyFat / 100))} kg` : '—'}</td>
-                      <td>{b.waist !== undefined ? `${fmt1(b.waist)} cm` : '—'}</td>
-                      <td className="row-actions">
-                        <button className="btn danger small" onClick={() => remove(b)} aria-label="Eliminar">
-                          ✕
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <Table compact>
+              <thead>
+                <tr>
+                  <ColHead align="left">Fecha</ColHead>
+                  <ColHead>Peso</ColHead>
+                  <ColHead>% grasa</ColHead>
+                  <ColHead>Magra</ColHead>
+                  <ColHead>Cintura</ColHead>
+                  <ColHead />
+                </tr>
+              </thead>
+              <tbody>
+                {[...sorted].reverse().map((b) => (
+                  <Tr key={b.id}>
+                    <Th scope="row" align="left" className="font-semibold">
+                      {formatDM(fromISO(b.date))}/{b.date.slice(0, 4)}
+                      {b.note && <div className="text-[13px] font-normal text-ink-2">{b.note}</div>}
+                    </Th>
+                    <Td>{fmt1(b.weight)} kg</Td>
+                    <Td>{b.bodyFat !== undefined ? `${fmt1(b.bodyFat)} %` : '—'}</Td>
+                    <Td>{b.bodyFat !== undefined ? `${fmt1(b.weight * (1 - b.bodyFat / 100))} kg` : '—'}</Td>
+                    <Td>{b.waist !== undefined ? `${fmt1(b.waist)} cm` : '—'}</Td>
+                    <Td align="right" className="whitespace-nowrap">
+                      <Button variant="danger" size="sm" onClick={() => remove(b)} aria-label="Eliminar">
+                        <XIcon size={14} />
+                      </Button>
+                    </Td>
+                  </Tr>
+                ))}
+              </tbody>
+            </Table>
           )}
-        </section>
-      </div>
+        </Card>
+      </TwoCol>
 
       {chartData.length >= 2 && (
-        <div className="stats-grid">
-          <section className="card">
-            <h2>Peso (kg)</h2>
-            <TrendChart data={chartData} dataKey="weight" unit="kg" className="line-weight" />
-          </section>
+        <Grid2>
+          <Card>
+            <CardTitle>Peso (kg)</CardTitle>
+            <TrendChart data={chartData} dataKey="weight" unit="kg" color="var(--flow-in)" />
+          </Card>
           {hasFat && (
-            <section className="card">
-              <h2>% de grasa</h2>
-              <TrendChart data={chartData} dataKey="bodyFat" unit="%" className="line-fat" />
-            </section>
+            <Card delay={0.08}>
+              <CardTitle>% de grasa</CardTitle>
+              <TrendChart data={chartData} dataKey="bodyFat" unit="%" color="var(--macro-fat)" />
+            </Card>
           )}
-        </div>
+        </Grid2>
       )}
-    </div>
+    </Stack>
   );
 }
 
 function Stat({ label, value, sub, delta, unit }: { label: string; value: string; sub?: string; delta?: number | null; unit?: string }) {
   return (
-    <div className="body-stat">
-      <span className="muted small">{label}</span>
-      <strong className="body-value">{value}</strong>
+    <div className="flex flex-col gap-0.5 rounded-[14px] border border-transparent bg-surface-2 px-3.5 py-3 transition duration-300 ease-out-expo hover:-translate-y-[3px] hover:border-accent/30 hover:shadow-card">
+      <span className="text-[13px] text-ink-2">{label}</span>
+      <strong className="font-display text-[22px] tabular-nums">{value}</strong>
       {delta !== undefined && delta !== null && (
-        <span className={`small delta ${delta <= 0 ? 'down' : 'up'}`}>
+        <span className={cn('text-[13px] font-semibold', delta <= 0 ? 'text-good-ink' : 'text-warn-ink')}>
           {delta > 0 ? '▲ +' : delta < 0 ? '▼ −' : ''}
           {fmt1(Math.abs(delta))} {unit}
         </span>
       )}
-      {sub && <span className="muted small">{sub}</span>}
+      {sub && <span className="text-[13px] text-ink-2">{sub}</span>}
     </div>
   );
 }
 
 function TrendChart({
-  data, dataKey, unit, className,
+  data, dataKey, unit, color,
 }: {
   data: { label: string; weight: number; bodyFat: number | null }[];
   dataKey: 'weight' | 'bodyFat';
   unit: string;
-  className: string;
+  color: string;
 }) {
+  const dot = { fill: color, stroke: 'var(--surface)', strokeWidth: 2 };
   return (
-    <div className="stat-chart fin-chart">
+    <ChartFrame className="mt-2">
       <ResponsiveContainer width="100%" height={220}>
         <LineChart data={data} margin={{ top: 12, right: 12, bottom: 0, left: -16 }}>
-          <CartesianGrid vertical={false} />
-          <XAxis dataKey="label" tickLine={false} tick={{ fontSize: 11, fill: '#898781' }} minTickGap={16} />
+          <CartesianGrid vertical={false} stroke={chart.grid} />
+          <XAxis dataKey="label" tickLine={false} axisLine={chart.axis} tick={chart.tick} minTickGap={16} />
           <YAxis
             domain={[(min: number) => Math.floor(min - 1), (max: number) => Math.ceil(max + 1)]}
             allowDecimals={false}
             tickLine={false}
             axisLine={false}
-            tick={{ fontSize: 11, fill: '#898781' }}
+            tick={chart.tick}
             tickFormatter={(v: number) => fmt1(Math.round(v * 10) / 10)}
           />
           <Tooltip
-            cursor={{ className: 'chart-crosshair' }}
+            cursor={chart.lineCursor}
             isAnimationActive={false}
             content={({ active, payload }) =>
               active && payload?.length ? (
-                <div className="chart-tip">
-                  <div className="chart-tip-title">{(payload[0].payload as { label: string }).label}</div>
+                <ChartTip title={(payload[0].payload as { label: string }).label}>
                   <strong>
                     {fmt1(payload[0].value as number)} {unit}
                   </strong>
-                </div>
+                </ChartTip>
               ) : null
             }
           />
           <Line
             type="monotone"
             dataKey={dataKey}
-            className={className}
+            stroke={color}
             strokeWidth={2}
-            dot={{ r: 4 }}
-            activeDot={{ r: 6 }}
+            dot={{ r: 4, ...dot }}
+            activeDot={{ r: 6, ...dot }}
             connectNulls
             isAnimationActive={false}
           />
         </LineChart>
       </ResponsiveContainer>
-    </div>
+    </ChartFrame>
   );
 }

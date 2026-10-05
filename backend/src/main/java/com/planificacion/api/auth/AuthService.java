@@ -5,6 +5,7 @@ import com.planificacion.api.auth.AuthDtos.LoginRequest;
 import com.planificacion.api.auth.AuthDtos.RegisterRequest;
 import com.planificacion.api.common.error.ConflictException;
 import com.planificacion.api.common.error.InvalidCredentialsException;
+import com.planificacion.api.user.AccountType;
 import com.planificacion.api.user.User;
 import com.planificacion.api.user.UserController.UserResponse;
 import com.planificacion.api.user.UserRepository;
@@ -51,7 +52,8 @@ public class AuthService {
         if (users.existsByEmail(email)) {
             throw new ConflictException("Ya existe una cuenta con ese email");
         }
-        User user = users.save(new User(email, passwordEncoder.encode(req.password()), req.fullName().trim()));
+        AccountType accountType = req.accountType() != null ? req.accountType() : AccountType.PERSONAL;
+        User user = users.save(new User(email, passwordEncoder.encode(req.password()), req.fullName().trim(), accountType));
         log.info("Usuario registrado {}", user.getId());
         return issueTokens(user);
     }

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { describeImport, importToServer, markLegacyMigrated, readLegacyData } from '../api/migration';
 import { useToast } from './Toaster';
+import { Button, Card, FormActions } from '../ui';
 
 /**
  * Aparece si este navegador tiene datos de la versión anterior (sin servidor) y la cuenta está vacía.
@@ -41,21 +42,25 @@ export default function MigrationBanner({ onDone }: { onDone: () => Promise<void
   };
 
   return (
-    <section className="card migration" role="region" aria-label="Migrar datos">
+    <Card
+      className="flex flex-wrap items-center justify-between gap-4 border-accent bg-linear-120 from-accent/10 to-surface to-60%"
+      role="region"
+      aria-label="Migrar datos"
+    >
       <div>
-        <h2>Tienes datos guardados en este navegador</h2>
-        <p className="muted">
+        <h2 className="mb-1">Tienes datos guardados en este navegador</h2>
+        <p className="text-ink-2">
           De la versión anterior: {summary}. Súbelos a tu cuenta para verlos desde cualquier dispositivo.
         </p>
       </div>
-      <div className="form-actions">
-        <button className="btn primary" onClick={migrate} disabled={busy}>
+      <FormActions>
+        <Button variant="primary" onClick={migrate} disabled={busy}>
           {busy ? 'Subiendo…' : 'Subir a mi cuenta'}
-        </button>
-        <button className="btn ghost" onClick={dismiss} disabled={busy}>
+        </Button>
+        <Button variant="ghost" onClick={dismiss} disabled={busy}>
           Ahora no
-        </button>
-      </div>
-    </section>
+        </Button>
+      </FormActions>
+    </Card>
   );
 }

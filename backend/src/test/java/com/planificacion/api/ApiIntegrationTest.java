@@ -2,6 +2,7 @@ package com.planificacion.api;
 
 import com.jayway.jsonpath.JsonPath;
 import com.planificacion.api.finance.BcvRateClient;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -15,11 +16,17 @@ import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
+import java.io.ByteArrayInputStream;
 import java.math.BigDecimal;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.LocalDate;
 import java.time.ZoneId;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.hasItem;
 import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.notNullValue;
@@ -76,6 +83,32 @@ class ApiIntegrationTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.errors.email", notNullValue()))
                 .andExpect(jsonPath("$.errors.password", notNullValue()));
+    }
+
+    @Test
+    void cuentaDeEmpresaSoloTienePlanificacionYPendientes() throws Exception {
+        // Sin indicar el tipo, la cuenta es personal y ve todos los módulos
+        String personal = register(uniqueEmail());
+        call(HttpMethod.GET, "/api/users/me", personal, null).andExpect(jsonPath("$.accountType").value("PERSONAL"));
+        call(HttpMethod.GET, "/api/finance/summary", personal, null).andExpect(status().isOk());
+
+        String body = call(HttpMethod.POST, "/api/auth/register", null, """
+                {"email":"%s","password":"secreta123","fullName":"Acme C.A.","accountType":"BUSINESS"}"""
+                .formatted(uniqueEmail()))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.user.accountType").value("BUSINESS"))
+                .andReturn().getResponse().getContentAsString();
+        String empresa = JsonPath.read(body, "$.accessToken");
+
+        call(HttpMethod.GET, "/api/disciplines", empresa, null).andExpect(status().isOk());
+        call(HttpMethod.GET, "/api/tasks", empresa, null).andExpect(status().isOk());
+        call(HttpMethod.GET, "/api/finance/summary", empresa, null).andExpect(status().isForbidden());
+        call(HttpMethod.GET, "/api/nutrition/profile", empresa, null).andExpect(status().isForbidden());
+
+        // Tipo desconocido → 400
+        call(HttpMethod.POST, "/api/auth/register", null, """
+                {"email":"%s","password":"secreta123","fullName":"X","accountType":"OTRO"}""".formatted(uniqueEmail()))
+                .andExpect(status().isBadRequest());
     }
 
     @Test
@@ -315,6 +348,72 @@ class ApiIntegrationTest {
 
         // Segunda importación: la cuenta ya tiene datos → 409
         call(HttpMethod.POST, "/api/import/legacy", token, backup).andExpect(status().isConflict());
+    }
+
+    // ---------------------------------------------------------------- informe
+
+    @Test
+    void informeExcelTraeUnaHojaPorModuloYGraficos() throws Exception {
+        String token = register(uniqueEmail());
+        String leer = idOf(call(HttpMethod.POST, "/api/disciplines", token, """
+                {"name":"Leer 30 min","icon":"📚"}""").andExpect(status().isCreated()));
+        idOf(call(HttpMethod.POST, "/api/disciplines", token, """
+                {"name":"Gym","icon":"🏋️"}""").andExpect(status().isCreated()));
+        call(HttpMethod.PUT, "/api/planning/%s/disciplines/%s".formatted(TODAY, leer), token, null)
+                .andExpect(status().isNoContent());
+        call(HttpMethod.POST, "/api/tasks", token, """
+                {"name":"Reparar licuadora","priority":"HIGH","deadline":"%s"}""".formatted(TODAY.plusDays(3)))
+                .andExpect(status().isCreated());
+        call(HttpMethod.PUT, "/api/finance/rates/manual", token, """
+                {"date":"%s","usd":180.5,"eur":211.3}""".formatted(TODAY)).andExpect(status().isOk());
+        call(HttpMethod.POST, "/api/finance/movements", token, """
+                {"kind":"INCOME","date":"%s","account":"ZELLE","amount":500,"incomeType":"SALARY"}"""
+                .formatted(TODAY)).andExpect(status().isCreated());
+        call(HttpMethod.POST, "/api/finance/movements", token, """
+                {"kind":"EXPENSE","date":"%s","account":"PAGO_MOVIL","amount":3610,"expenseReason":"PURCHASE",
+                 "expenseClass":"EXPENSE","category":"Comida","description":"Mercado"}"""
+                .formatted(TODAY)).andExpect(status().isCreated());
+        call(HttpMethod.POST, "/api/nutrition/diary/entries", token, """
+                {"date":"%s","meal":"LUNCH","name":"Pollo con arroz","kcal":720,"protein":58,"carbs":80,"fat":16,"fiber":5}"""
+                .formatted(TODAY)).andExpect(status().isCreated());
+        call(HttpMethod.PUT, "/api/nutrition/body", token, """
+                {"date":"%s","weightKg":78.4,"bodyFatPct":18}""".formatted(TODAY.minusDays(7))).andExpect(status().isOk());
+        call(HttpMethod.PUT, "/api/nutrition/body", token, """
+                {"date":"%s","weightKg":77.9,"bodyFatPct":17.6}""".formatted(TODAY)).andExpect(status().isOk());
+
+        byte[] xlsx = call(HttpMethod.GET, "/api/export/excel", token, null)
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsByteArray();
+        // Se deja en target/ para poder abrirlo a mano
+        Files.write(Path.of("target", "informe-prueba.xlsx"), xlsx);
+
+        try (XSSFWorkbook wb = new XSSFWorkbook(new ByteArrayInputStream(xlsx))) {
+            assertThat(sheetNames(wb)).containsExactly("Resumen", "Planificación", "Disciplinas", "Pendientes",
+                    "Movimientos", "Nutrición", "Diario de comidas", "Cuerpo");
+            assertThat(wb.getSheet("Resumen").getDrawingPatriarch().getCharts()).hasSize(4);
+            assertThat(wb.getSheet("Nutrición").getDrawingPatriarch().getCharts()).hasSize(1);
+            assertThat(wb.getSheet("Cuerpo").getDrawingPatriarch().getCharts()).hasSize(2);
+            // Hoy se cumplió 1 de 2 disciplinas
+            assertThat(wb.getSheet("Planificación").getRow(1).getCell(4).getNumericCellValue()).isEqualTo(1);
+            assertThat(wb.getSheet("Movimientos").getLastRowNum()).isEqualTo(2);
+        }
+
+        // Una empresa no lleva hojas de finanzas ni de nutrición
+        String body = call(HttpMethod.POST, "/api/auth/register", null, """
+                {"email":"%s","password":"secreta123","fullName":"Acme C.A.","accountType":"BUSINESS"}"""
+                .formatted(uniqueEmail())).andReturn().getResponse().getContentAsString();
+        byte[] business = call(HttpMethod.GET, "/api/export/excel", JsonPath.read(body, "$.accessToken"), null)
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsByteArray();
+        try (XSSFWorkbook wb = new XSSFWorkbook(new ByteArrayInputStream(business))) {
+            assertThat(sheetNames(wb)).containsExactly("Resumen", "Planificación", "Disciplinas", "Pendientes");
+        }
+    }
+
+    private static List<String> sheetNames(XSSFWorkbook wb) {
+        List<String> names = new ArrayList<>();
+        wb.forEach(sheet -> names.add(sheet.getSheetName()));
+        return names;
     }
 
     // ---------------------------------------------------------------- helpers

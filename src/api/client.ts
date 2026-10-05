@@ -9,11 +9,15 @@
 const BASE_URL = (import.meta.env.VITE_API_URL as string | undefined) ?? 'http://localhost:8080/api';
 const REFRESH_KEY = 'pd.auth.refresh';
 
+/** Una cuenta de empresa solo usa planificación, disciplinas y pendientes. */
+export type AccountType = 'PERSONAL' | 'BUSINESS';
+
 export interface ApiUser {
   id: string;
   email: string;
   fullName: string;
   role: string;
+  accountType: AccountType;
   createdAt: string;
 }
 
@@ -129,6 +133,19 @@ export async function request<T>(method: string, path: string, body?: unknown): 
   return (await res.json()) as T;
 }
 
+/** Descarga un archivo generado por la API (con la sesión actual). */
+export async function download(path: string): Promise<Blob> {
+  let res = await send('GET', path);
+  if (res.status === 401 && readRefresh() && (await refreshSession())) res = await send('GET', path);
+  if (res.status === 401) {
+    clearSession();
+    onSessionExpired?.();
+    throw new ApiError(401, 'Tu sesión expiró. Inicia sesión de nuevo.');
+  }
+  if (!res.ok) throw await toError(res);
+  return res.blob();
+}
+
 export const api = {
   get: <T>(path: string) => request<T>('GET', path),
   post: <T>(path: string, body?: unknown) => request<T>('POST', path, body),
@@ -144,8 +161,8 @@ export const authApi = {
     return res.user;
   },
 
-  async register(email: string, password: string, fullName: string): Promise<ApiUser> {
-    const res = await request<AuthResponse>('POST', '/auth/register', { email, password, fullName });
+  async register(email: string, password: string, fullName: string, accountType: AccountType): Promise<ApiUser> {
+    const res = await request<AuthResponse>('POST', '/auth/register', { email, password, fullName, accountType });
     saveSession(res);
     return res.user;
   },

@@ -7,6 +7,10 @@ import {
 import { balances, fmtAccount, fmtBs, fmtEur, fmtNum, fmtUsd, parseAmount, toBs, toUsd, usdtAverageRate } from './calc';
 import { newId } from '../lib/storage';
 import { toISO, today } from '../lib/dates';
+import { AlertIcon } from '../components/Icons';
+import {
+  Button, Card, CardTitle, Field, FieldRow, FormActions, FormError, Hint, Input, Segmented, SegmentedOption, Select, formClass,
+} from '../ui';
 
 interface Props {
   kind: MovementKind;
@@ -246,221 +250,187 @@ export default function MovementForm({ kind, data, editing, onSubmit, onCancel }
   const isLinkedEdit = !!editing?.linkId;
 
   return (
-    <section className="card">
-      <h2>
+    <Card>
+      <CardTitle>
         {editing ? 'Editar' : 'Nueva'} {isSalida ? 'salida' : 'entrada'}
-      </h2>
-      <form className="form" onSubmit={submit}>
-        <label className="field">
-          <span>Fecha</span>
-          <input type="date" className="input" value={date} onChange={(e) => setDate(e.target.value)} required />
-        </label>
+      </CardTitle>
+      <form className={formClass} onSubmit={submit}>
+        <Field label="Fecha">
+          <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} required />
+        </Field>
 
-        <div className="field">
-          <span>Moneda</span>
-          <div className="segmented">
+        <Field label="Moneda" as="div">
+          <Segmented>
             {(['USD', 'VES'] as Currency[]).map((c) => (
-              <button
-                type="button"
-                key={c}
-                className={currency === c ? 'active' : ''}
-                onClick={() => changeCurrency(c)}
-                disabled={isLinkedEdit}
-              >
+              <SegmentedOption key={c} active={currency === c} onClick={() => changeCurrency(c)} disabled={isLinkedEdit}>
                 {c === 'USD' ? '$ Dólares' : 'Bs Bolívares'}
-              </button>
+              </SegmentedOption>
             ))}
-          </div>
-        </div>
+          </Segmented>
+        </Field>
 
-        <div className="field">
-          <span>{isSalida ? 'Sale de' : 'Entra a'}</span>
-          <div className="segmented">
+        <Field label={isSalida ? 'Sale de' : 'Entra a'} as="div">
+          <Segmented>
             {accountsOf(currency).map((a) => (
-              <button
-                type="button"
-                key={a}
-                className={account === a ? 'active' : ''}
-                onClick={() => setAccount(a)}
-                disabled={isLinkedEdit}
-              >
+              <SegmentedOption key={a} active={account === a} onClick={() => setAccount(a)} disabled={isLinkedEdit}>
                 {ACCOUNT_ICON[a]} {ACCOUNT_LABEL[a]}
-              </button>
+              </SegmentedOption>
             ))}
-          </div>
-          <span className="hint">Saldo actual: {fmtAccount(account, bal[account])}</span>
-        </div>
+          </Segmented>
+          <Hint>Saldo actual: {fmtAccount(account, bal[account])}</Hint>
+        </Field>
 
-        <label className="field">
-          <span>Monto {account === 'usdt' ? '(USDT)' : currency === 'USD' ? '($)' : '(Bs)'}</span>
-          <input
-            className="input amount-input"
-            inputMode="decimal"
-            value={amount}
-            onChange={(e) => setAmount(e.target.value)}
-            placeholder="0,00"
-            required
-          />
+        <Field label={`Monto ${account === 'usdt' ? '(USDT)' : currency === 'USD' ? '($)' : '(Bs)'}`}>
+          <Input amount inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0,00" required />
           {preview && (
-            <span className="hint">
-              ≈ {fmtUsd(preview.usd)} · {fmtBs(preview.bsBcv)} · {fmtEur(preview.eur)} <em>(tasa BCV)</em>
-            </span>
+            <Hint>
+              ≈ {fmtUsd(preview.usd)} · {fmtBs(preview.bsBcv)} · {fmtEur(preview.eur)} <em className="text-muted not-italic">(tasa BCV)</em>
+            </Hint>
           )}
           {overdraft && (
-            <span className="hint warn">⚠ Es más de lo que tienes en {ACCOUNT_LABEL[account]} ({fmtAccount(account, available)}).</span>
+            <Hint tone="warn" className="inline-flex items-start gap-1.5">
+              <AlertIcon size={14} className="mt-0.5 flex-none" />
+              Es más de lo que tienes en {ACCOUNT_LABEL[account]} ({fmtAccount(account, available)}).
+            </Hint>
           )}
-        </label>
+        </Field>
 
         {/* Entrada: tipo */}
         {!isSalida && (
-          <label className="field">
-            <span>Tipo de entrada</span>
-            <select className="input" value={incomeType} onChange={(e) => setIncomeType(e.target.value as IncomeType)} disabled={isLinkedEdit}>
+          <Field label="Tipo de entrada">
+            <Select value={incomeType} onChange={(e) => setIncomeType(e.target.value as IncomeType)} disabled={isLinkedEdit}>
               {Object.entries(INCOME_LABEL).map(([k, v]) => (
                 <option key={k} value={k}>
                   {v}
                 </option>
               ))}
-            </select>
-          </label>
+            </Select>
+          </Field>
         )}
 
         {/* Salida: motivo, clase y categoría */}
         {isSalida && (
-          <label className="field">
-            <span>Motivo</span>
-            <select className="input" value={reason} onChange={(e) => setReason(e.target.value as ExpenseReason)} disabled={!!editing}>
+          <Field label="Motivo">
+            <Select value={reason} onChange={(e) => setReason(e.target.value as ExpenseReason)} disabled={!!editing}>
               {Object.entries(REASON_LABEL).map(([k, v]) => (
                 <option key={k} value={k}>
                   {v}
                 </option>
               ))}
-            </select>
-          </label>
+            </Select>
+          </Field>
         )}
 
         {isSalida && !isTransferReason && (
           <>
-            <div className="field">
-              <span>Clasificación</span>
-              <div className="segmented">
+            <Field label="Clasificación" as="div">
+              <Segmented>
                 {(['gasto', 'costo'] as ExpenseClass[]).map((c) => (
-                  <button type="button" key={c} className={expenseClass === c ? 'active' : ''} onClick={() => setExpenseClass(c)}>
+                  <SegmentedOption key={c} active={expenseClass === c} onClick={() => setExpenseClass(c)}>
                     {CLASS_LABEL[c]}
-                  </button>
+                  </SegmentedOption>
                 ))}
-              </div>
-              <span className="hint">{CLASS_HINT[expenseClass]}</span>
-            </div>
-            <label className="field">
-              <span>Categoría</span>
-              <select className="input" value={category} onChange={(e) => setCategory(e.target.value)}>
+              </Segmented>
+              <Hint>{CLASS_HINT[expenseClass]}</Hint>
+            </Field>
+            <Field label="Categoría">
+              <Select value={category} onChange={(e) => setCategory(e.target.value)}>
                 {EXPENSE_CATEGORIES.map((c) => (
                   <option key={c}>{c}</option>
                 ))}
-              </select>
-            </label>
+              </Select>
+            </Field>
           </>
         )}
 
         {isTransferReason && !editing && (
-          <fieldset className="subform">
-            <legend>¿Qué recibiste?</legend>
-            <div className="field">
-              <span>Entra a</span>
-              <select className="input" value={toAccount} onChange={(e) => setToAccount(e.target.value as Account)}>
+          <fieldset className="m-0 flex flex-col gap-2.5 rounded-xl border border-dashed border-axis p-3">
+            <legend className="px-1.5 text-[13px] font-bold">¿Qué recibiste?</legend>
+            <Field label="Entra a">
+              <Select value={toAccount} onChange={(e) => setToAccount(e.target.value as Account)}>
                 {ACCOUNTS.filter((a) => a !== account).map((a) => (
                   <option key={a} value={a}>
                     {ACCOUNT_ICON[a]} {ACCOUNT_LABEL[a]} ({ACCOUNT_CURRENCY[a] === 'USD' ? '$' : 'Bs'})
                   </option>
                 ))}
-              </select>
-            </div>
-            <label className="field">
-              <span>Monto recibido {toAccount === 'usdt' ? '(USDT)' : ACCOUNT_CURRENCY[toAccount] === 'USD' ? '($)' : '(Bs)'}</span>
-              <input className="input" inputMode="decimal" value={toAmount} onChange={(e) => setToAmount(e.target.value)} placeholder="0,00" />
-            </label>
+              </Select>
+            </Field>
+            <Field label={`Monto recibido ${toAccount === 'usdt' ? '(USDT)' : ACCOUNT_CURRENCY[toAccount] === 'USD' ? '($)' : '(Bs)'}`}>
+              <Input inputMode="decimal" value={toAmount} onChange={(e) => setToAmount(e.target.value)} placeholder="0,00" />
+            </Field>
             {impliedRate !== null && (
-              <span className="hint">
+              <Hint>
                 Tasa del cambio: <strong>{fmtNum(impliedRate)} Bs por {account === 'usdt' || toAccount === 'usdt' ? 'USDT' : '$'}</strong>
                 {ratesOk && ` · BCV: ${fmtNum(nRateUsd)}`}
-              </span>
+              </Hint>
             )}
-            {toAccount === 'usdt' && ACCOUNT_CURRENCY[account] === 'VES' && (
-              <span className="hint">Se guardará como tu tasa de compra de USDT.</span>
-            )}
+            {toAccount === 'usdt' && ACCOUNT_CURRENCY[account] === 'VES' && <Hint>Se guardará como tu tasa de compra de USDT.</Hint>}
           </fieldset>
         )}
 
         {/* USDT: tasa de compra */}
         {account === 'usdt' && (!isTransferReason || isSalida) && (
-          <label className="field">
-            <span>{isSalida ? 'Tasa a la que compraste esos USDT (Bs por USDT)' : 'Tasa a la que compraste (Bs por USDT)'}</span>
-            <input className="input" inputMode="decimal" value={usdtRate} onChange={(e) => setUsdtRate(e.target.value)} placeholder="Opcional" />
-            {isSalida && avgUsdt && <span className="hint">Tu tasa promedio de compra es {fmtNum(avgUsdt)} Bs.</span>}
+          <Field label={isSalida ? 'Tasa a la que compraste esos USDT (Bs por USDT)' : 'Tasa a la que compraste (Bs por USDT)'}>
+            <Input inputMode="decimal" value={usdtRate} onChange={(e) => setUsdtRate(e.target.value)} placeholder="Opcional" />
+            {isSalida && avgUsdt && <Hint>Tu tasa promedio de compra es {fmtNum(avgUsdt)} Bs.</Hint>}
             {nAmount > 0 && nUsdtRate > 0 && (
-              <span className="hint">
+              <Hint>
                 {fmtNum(nAmount)} USDT a tu tasa = <strong>{fmtBs(nAmount * nUsdtRate)}</strong>
                 {ratesOk && ` · a tasa BCV = ${fmtBs(nAmount * nRateUsd)}`}
-              </span>
+              </Hint>
             )}
-          </label>
+          </Field>
         )}
 
-        <label className="field">
-          <span>Descripción</span>
-          <input
-            className="input"
+        <Field label="Descripción">
+          <Input
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             placeholder={isSalida ? 'Ej. Mercado de la semana' : 'Ej. Pago quincena'}
           />
-        </label>
+        </Field>
 
-        <div className="rates-line">
+        <div className="flex flex-wrap items-center justify-between gap-2">
           {!editRates ? (
             <>
-              <span className="muted small">
+              <span className="text-[13px] text-ink-2">
                 Tasa BCV del día: {ratesOk ? `$ ${fmtNum(nRateUsd)} · € ${fmtNum(nRateEur)}` : 'sin tasa'}
               </span>
-              <button type="button" className="btn ghost small" onClick={() => setEditRates(true)}>
+              <Button variant="ghost" size="sm" onClick={() => setEditRates(true)}>
                 Cambiar
-              </button>
+              </Button>
             </>
           ) : (
-            <div className="field-row">
-              <label className="field">
-                <span>BCV $ (Bs)</span>
-                <input className="input" inputMode="decimal" value={rateUsd} onChange={(e) => setRateUsd(e.target.value)} />
-              </label>
-              <label className="field">
-                <span>BCV € (Bs)</span>
-                <input className="input" inputMode="decimal" value={rateEur} onChange={(e) => setRateEur(e.target.value)} />
-              </label>
-            </div>
+            <FieldRow className="w-full">
+              <Field label="BCV $ (Bs)">
+                <Input inputMode="decimal" value={rateUsd} onChange={(e) => setRateUsd(e.target.value)} />
+              </Field>
+              <Field label="BCV € (Bs)">
+                <Input inputMode="decimal" value={rateEur} onChange={(e) => setRateEur(e.target.value)} />
+              </Field>
+            </FieldRow>
           )}
         </div>
 
-        {error && <p className="form-error">{error}</p>}
+        {error && <FormError>{error}</FormError>}
 
-        <div className="form-actions">
-          <button type="submit" className="btn primary">
+        <FormActions>
+          <Button type="submit" variant="primary">
             {editing ? 'Guardar cambios' : isSalida ? 'Registrar salida' : 'Registrar entrada'}
-          </button>
+          </Button>
           {editing && (
-            <button
-              type="button"
-              className="btn ghost"
+            <Button
+              variant="ghost"
               onClick={() => {
                 reset();
                 onCancel();
               }}
             >
               Cancelar
-            </button>
+            </Button>
           )}
-        </div>
+        </FormActions>
       </form>
-    </section>
+    </Card>
   );
 }

@@ -2,6 +2,7 @@ import type { Activity, Checks, Task } from '../types';
 import type { FinanceData } from '../finance/types';
 import type { NutritionData } from '../nutrition/types';
 import { toISO, today } from './dates';
+import { download } from '../api/client';
 
 export interface BackupData {
   activities: Activity[];
@@ -23,11 +24,19 @@ interface BackupFile extends BackupData {
 /** Descarga todos los datos como un archivo .json. */
 export function exportBackup(data: BackupData) {
   const file: BackupFile = { app: 'planificacion-diaria', version: 3, exportedAt: new Date().toISOString(), ...data };
-  const blob = new Blob([JSON.stringify(file, null, 2)], { type: 'application/json' });
+  saveFile(new Blob([JSON.stringify(file, null, 2)], { type: 'application/json' }), `planificacion-respaldo-${toISO(today())}.json`);
+}
+
+/** Descarga el informe en Excel (hojas por módulo y gráficos) que genera el servidor. */
+export async function exportExcel() {
+  saveFile(await download('/export/excel'), `planificacion-informe-${toISO(today())}.xlsx`);
+}
+
+function saveFile(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `planificacion-respaldo-${toISO(today())}.json`;
+  a.download = filename;
   a.click();
   URL.revokeObjectURL(url);
 }

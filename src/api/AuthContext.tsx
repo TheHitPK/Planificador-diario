@@ -1,12 +1,12 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { authApi, setSessionExpiredHandler, type ApiUser } from './client';
+import { authApi, setSessionExpiredHandler, type AccountType, type ApiUser } from './client';
 
 type AuthState = { status: 'loading' } | { status: 'anon'; reason?: string } | { status: 'authed'; user: ApiUser };
 
 interface AuthContextValue {
   state: AuthState;
   login: (email: string, password: string) => Promise<void>;
-  register: (email: string, password: string, fullName: string) => Promise<void>;
+  register: (email: string, password: string, fullName: string, accountType: AccountType) => Promise<void>;
   logout: () => Promise<void>;
 }
 
@@ -28,8 +28,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setState({ status: 'authed', user: await authApi.login(email, password) });
   }, []);
 
-  const register = useCallback(async (email: string, password: string, fullName: string) => {
-    setState({ status: 'authed', user: await authApi.register(email, password, fullName) });
+  const register = useCallback(async (email: string, password: string, fullName: string, accountType: AccountType) => {
+    setState({ status: 'authed', user: await authApi.register(email, password, fullName, accountType) });
   }, []);
 
   const logout = useCallback(async () => {

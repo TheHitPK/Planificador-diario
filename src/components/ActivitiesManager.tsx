@@ -1,5 +1,9 @@
 import { useState, type FormEvent } from 'react';
 import type { Activity } from '../types';
+import { ArrowDownIcon, ArrowUpIcon } from './Icons';
+import {
+  Button, Card, CardTitle, Empty, Field, FormActions, IconBadge, Input, List, ListItem, Textarea, TwoCol, cn, formClass,
+} from '../ui';
 
 const ICONS = ['📚', '💧', '🏋️', '🛡️', '⏰', '🏃', '🧘', '🥗', '😴', '💻', '✍️', '🎸', '🙏', '🧹', '💰', '🚭', '📵', '🦷', '☀️', '🧠'];
 
@@ -52,105 +56,104 @@ export default function ActivitiesManager({ activities, onCreate, onUpdate, onDe
   };
 
   return (
-    <div className="two-col">
-      <section className="card">
-        <h2>{editingId ? 'Editar disciplina' : 'Nueva disciplina'}</h2>
-        <form className="form" onSubmit={save}>
-          <label className="field">
-            <span>Icono</span>
-            <div className="icon-picker">
+    <TwoCol>
+      <Card>
+        <CardTitle>{editingId ? 'Editar disciplina' : 'Nueva disciplina'}</CardTitle>
+        <form className={formClass} onSubmit={save}>
+          <Field label="Icono" as="div">
+            <div className="grid grid-cols-5 gap-1 sm:grid-cols-10">
               {ICONS.map((ic) => (
                 <button
                   type="button"
                   key={ic}
-                  className={`icon-opt ${draft.icon === ic ? 'selected' : ''}`}
+                  className={cn(
+                    'aspect-square rounded-[9px] border text-lg transition duration-150 ease-spring hover:scale-112',
+                    draft.icon === ic ? 'border-accent bg-accent/10' : 'border-transparent bg-surface-2 hover:border-line',
+                  )}
                   onClick={() => setDraft({ ...draft, icon: ic })}
                   aria-label={`Icono ${ic}`}
+                  aria-pressed={draft.icon === ic}
                 >
                   {ic}
                 </button>
               ))}
             </div>
-            <input
-              className="input icon-input"
+            <Input
+              className="w-[140px]"
               value={draft.icon}
               maxLength={4}
               onChange={(e) => setDraft({ ...draft, icon: e.target.value })}
               placeholder="O escribe un emoji"
+              aria-label="Icono personalizado"
             />
-          </label>
-          <label className="field">
-            <span>Nombre</span>
-            <input
-              className="input"
+          </Field>
+          <Field label="Nombre">
+            <Input
               value={draft.name}
               onChange={(e) => setDraft({ ...draft, name: e.target.value })}
               placeholder="Ej. Meditar 10 min"
               required
             />
-          </label>
-          <label className="field">
-            <span>Descripción</span>
-            <textarea
-              className="input"
+          </Field>
+          <Field label="Descripción">
+            <Textarea
               rows={3}
               value={draft.description}
               onChange={(e) => setDraft({ ...draft, description: e.target.value })}
               placeholder="Detalle de la disciplina"
             />
-          </label>
-          <div className="form-actions">
-            <button type="submit" className="btn primary">
+          </Field>
+          <FormActions>
+            <Button type="submit" variant="primary">
               {editingId ? 'Guardar cambios' : 'Agregar'}
-            </button>
+            </Button>
             {editingId && (
-              <button type="button" className="btn ghost" onClick={cancel}>
+              <Button variant="ghost" onClick={cancel}>
                 Cancelar
-              </button>
+              </Button>
             )}
-          </div>
+          </FormActions>
         </form>
-      </section>
+      </Card>
 
-      <section className="card">
-        <h2>Mis disciplinas ({activities.length})</h2>
+      <Card delay={0.08}>
+        <CardTitle>Mis disciplinas ({activities.length})</CardTitle>
         {activities.length === 0 ? (
-          <p className="empty">Todavía no hay disciplinas.</p>
+          <Empty>Todavía no hay disciplinas. Agrega la primera con el formulario.</Empty>
         ) : (
-          <ul className="list">
+          <List>
             {activities.map((a, i) => (
-              <li key={a.id} className={`list-item ${editingId === a.id ? 'editing' : ''}`}>
-                <span className="list-icon" aria-hidden>
-                  {a.icon}
-                </span>
-                <div className="list-body">
+              <ListItem key={a.id} index={i} editing={editingId === a.id}>
+                <IconBadge>{a.icon}</IconBadge>
+                <div className="flex min-w-0 flex-1 flex-col gap-1">
                   <strong>{a.name}</strong>
-                  {a.description && <p className="muted small">{a.description}</p>}
+                  {a.description && <p className="text-[13px] text-ink-2">{a.description}</p>}
                 </div>
-                <div className="list-actions">
-                  <button className="btn icon" onClick={() => move(i, -1)} disabled={i === 0} aria-label="Subir">
-                    ↑
-                  </button>
-                  <button
-                    className="btn icon"
+                <div className="flex flex-wrap justify-end gap-1.5">
+                  <Button variant="ghost" size="icon" onClick={() => move(i, -1)} disabled={i === 0} aria-label="Subir">
+                    <ArrowUpIcon size={15} />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
                     onClick={() => move(i, 1)}
                     disabled={i === activities.length - 1}
                     aria-label="Bajar"
                   >
-                    ↓
-                  </button>
-                  <button className="btn ghost small" onClick={() => edit(a)}>
+                    <ArrowDownIcon size={15} />
+                  </Button>
+                  <Button variant="ghost" size="sm" onClick={() => edit(a)}>
                     Editar
-                  </button>
-                  <button className="btn danger small" onClick={() => remove(a)}>
+                  </Button>
+                  <Button variant="danger" size="sm" onClick={() => remove(a)}>
                     Eliminar
-                  </button>
+                  </Button>
                 </div>
-              </li>
+              </ListItem>
             ))}
-          </ul>
+          </List>
         )}
-      </section>
-    </div>
+      </Card>
+    </TwoCol>
   );
 }

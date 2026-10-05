@@ -31,12 +31,21 @@ public class User extends BaseEntity {
     @Column(nullable = false)
     private Role role = Role.USER;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "account_type", nullable = false)
+    private AccountType accountType = AccountType.PERSONAL;
+
     @Column(nullable = false)
     private boolean enabled = true;
 
     public User(String email, String passwordHash, String fullName) {
+        this(email, passwordHash, fullName, AccountType.PERSONAL);
+    }
+
+    public User(String email, String passwordHash, String fullName, AccountType accountType) {
         this.email = email;
         this.passwordHash = passwordHash;
         this.fullName = fullName;
+        this.accountType = accountType;
     }
 }

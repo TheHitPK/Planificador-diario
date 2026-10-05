@@ -1,6 +1,12 @@
 import { useState, type FormEvent } from 'react';
 import type { Task, TaskPriority, TaskStatus } from '../types';
 import { diffDays, formatDM, fromISO, toISO, today } from '../lib/dates';
+import { useLocalStorage } from '../lib/storage';
+import { CalendarIcon, GridIcon, ListIcon } from './Icons';
+import {
+  Button, Card, CardHead, CardTitle, Chip, Empty, Field, FieldRow, FormActions, Input, List, ListItem, Segmented, SegmentedOption,
+  Select, Tag, Textarea, TwoCol, cn, formClass, type TagTone,
+} from '../ui';
 
 const STATUS_LABEL: Record<TaskStatus, string> = {
   pendiente: 'Pendiente',
@@ -13,6 +19,15 @@ const PRIORITY_LABEL: Record<TaskPriority, string> = {
   media: 'Media',
   baja: 'Baja',
 };
+
+const PRIORITY_TONE: Record<TaskPriority, TagTone> = { alta: 'bad', media: 'warn', baja: 'neutral' };
+const DEADLINE_TONE: Record<string, string> = { late: 'text-bad-ink', soon: 'text-warn-ink', normal: 'text-ink-2', ok: 'text-good-ink' };
+const STATUS_TONE: Record<TaskStatus, string> = { pendiente: '', en_progreso: 'text-accent-text', completada: 'text-good-ink' };
+
+/** Franja superior de la tarjeta según la prioridad (la etiqueta lo dice también con texto). */
+const PRIORITY_EDGE: Record<TaskPriority, string> = { alta: 'border-t-bad', media: 'border-t-warn', baja: 'border-t-axis' };
+
+type View = 'lista' | 'tarjetas';
 
 const PRIORITY_ORDER: Record<TaskPriority, number> = { alta: 0, media: 1, baja: 2 };
 const STATUS_ORDER: Record<TaskStatus, number> = { en_progreso: 0, pendiente: 1, completada: 2 };
@@ -49,6 +64,7 @@ export default function TasksModule({ tasks, onCreate, onUpdate, onStatus, onDel
   const [draft, setDraft] = useState<Draft>(emptyDraft);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [filter, setFilter] = useState<Filter>('activas');
+  const [view, setView] = useLocalStorage<View>('pd.tasks.view', 'lista');
 
   const save = (e: FormEvent) => {
     e.preventDefault();
@@ -105,145 +121,174 @@ export default function TasksModule({ tasks, onCreate, onUpdate, onStatus, onDel
   ];
 
   return (
-    <div className="two-col">
-      <section className="card">
-        <h2>{editingId ? 'Editar pendiente' : 'Nuevo pendiente'}</h2>
-        <form className="form" onSubmit={save}>
-          <label className="field">
-            <span>Nombre de la actividad</span>
-            <input
-              className="input"
+    <TwoCol>
+      <Card>
+        <CardTitle>{editingId ? 'Editar pendiente' : 'Nuevo pendiente'}</CardTitle>
+        <form className={formClass} onSubmit={save}>
+          <Field label="Nombre de la actividad">
+            <Input
               value={draft.name}
               onChange={(e) => setDraft({ ...draft, name: e.target.value })}
               placeholder="Ej. Reparar la licuadora"
               required
             />
-          </label>
-          <label className="field">
-            <span>Descripción</span>
-            <textarea
-              className="input"
+          </Field>
+          <Field label="Descripción">
+            <Textarea
               rows={3}
               value={draft.description}
               onChange={(e) => setDraft({ ...draft, description: e.target.value })}
               placeholder="Detalles, a quién entregar, materiales…"
             />
-          </label>
-          <div className="field-row">
-            <label className="field">
-              <span>Estado</span>
-              <select
-                className="input"
-                value={draft.status}
-                onChange={(e) => setDraft({ ...draft, status: e.target.value as TaskStatus })}
-              >
+          </Field>
+          <FieldRow>
+            <Field label="Estado">
+              <Select value={draft.status} onChange={(e) => setDraft({ ...draft, status: e.target.value as TaskStatus })}>
                 {Object.entries(STATUS_LABEL).map(([k, v]) => (
                   <option key={k} value={k}>
                     {v}
                   </option>
                 ))}
-              </select>
-            </label>
-            <label className="field">
-              <span>Prioridad</span>
-              <select
-                className="input"
-                value={draft.priority}
-                onChange={(e) => setDraft({ ...draft, priority: e.target.value as TaskPriority })}
-              >
+              </Select>
+            </Field>
+            <Field label="Prioridad">
+              <Select value={draft.priority} onChange={(e) => setDraft({ ...draft, priority: e.target.value as TaskPriority })}>
                 {Object.entries(PRIORITY_LABEL).map(([k, v]) => (
                   <option key={k} value={k}>
                     {v}
                   </option>
                 ))}
-              </select>
-            </label>
-          </div>
-          <label className="field">
-            <span>Plazo (fecha límite)</span>
-            <input
-              type="date"
-              className="input"
-              value={draft.deadline}
-              onChange={(e) => setDraft({ ...draft, deadline: e.target.value })}
-              required
-            />
-          </label>
-          <div className="form-actions">
-            <button type="submit" className="btn primary">
+              </Select>
+            </Field>
+          </FieldRow>
+          <Field label="Plazo (fecha límite)">
+            <Input type="date" value={draft.deadline} onChange={(e) => setDraft({ ...draft, deadline: e.target.value })} required />
+          </Field>
+          <FormActions>
+            <Button type="submit" variant="primary">
               {editingId ? 'Guardar cambios' : 'Agregar'}
-            </button>
+            </Button>
             {editingId && (
-              <button type="button" className="btn ghost" onClick={cancel}>
+              <Button variant="ghost" onClick={cancel}>
                 Cancelar
-              </button>
+              </Button>
             )}
-          </div>
+          </FormActions>
         </form>
-      </section>
+      </Card>
 
-      <section className="card">
-        <h2>Pendientes</h2>
-        <div className="filters" role="tablist">
+      <Card delay={0.08}>
+        <CardHead>
+          <h2>Pendientes</h2>
+          <Segmented role="group" aria-label="Forma de ver los pendientes">
+            <SegmentedOption active={view === 'lista'} onClick={() => setView('lista')}>
+              <span className="inline-flex items-center gap-1.5">
+                <ListIcon size={15} />
+                Lista
+              </span>
+            </SegmentedOption>
+            <SegmentedOption active={view === 'tarjetas'} onClick={() => setView('tarjetas')}>
+              <span className="inline-flex items-center gap-1.5">
+                <GridIcon size={15} />
+                Tarjetas
+              </span>
+            </SegmentedOption>
+          </Segmented>
+        </CardHead>
+        <div className="mb-3.5 flex flex-wrap gap-1.5" role="tablist">
           {FILTERS.map((f) => (
-            <button
-              key={f.id}
-              className={`chip ${filter === f.id ? 'active' : ''}`}
-              onClick={() => setFilter(f.id)}
-              role="tab"
-              aria-selected={filter === f.id}
-            >
-              {f.label} <span className="chip-count">{counts[f.id]}</span>
-            </button>
+            <Chip key={f.id} active={filter === f.id} onClick={() => setFilter(f.id)} role="tab" aria-selected={filter === f.id}>
+              {f.label} <span className="opacity-75">{counts[f.id]}</span>
+            </Chip>
           ))}
         </div>
 
         {visible.length === 0 ? (
-          <p className="empty">No hay nada aquí.</p>
+          <Empty>No hay pendientes en este filtro.</Empty>
         ) : (
-          <ul className="list">
-            {visible.map((t) => {
+          // key={view}: al cambiar de vista los elementos vuelven a entrar escalonados.
+          <List key={view} className={cn(view === 'tarjetas' && 'grid gap-3 sm:grid-cols-2')}>
+            {visible.map((t, i) => {
               const dl = deadlineInfo(t);
+              const done = t.status === 'completada';
+
+              const name = <strong className={cn(done && 'text-muted line-through')}>{t.name}</strong>;
+              const priority = <Tag tone={PRIORITY_TONE[t.priority]}>Prioridad {PRIORITY_LABEL[t.priority].toLowerCase()}</Tag>;
+              const deadline = (
+                <span className={cn('inline-flex items-center gap-1.5 text-[13px] font-semibold', DEADLINE_TONE[dl.tone])}>
+                  <CalendarIcon size={14} />
+                  {formatDM(fromISO(t.deadline))} · {dl.text}
+                </span>
+              );
+              const status = (
+                <Select
+                  className={cn('min-h-9 w-auto px-2 py-1 text-[13px] md:min-h-8 md:text-[13px]', STATUS_TONE[t.status])}
+                  value={t.status}
+                  onChange={(e) => setStatus(t, e.target.value as TaskStatus)}
+                  aria-label={`Cambiar estado de ${t.name}`}
+                >
+                  {Object.entries(STATUS_LABEL).map(([k, v]) => (
+                    <option key={k} value={k}>
+                      {v}
+                    </option>
+                  ))}
+                </Select>
+              );
+              const actions = (
+                <div className="flex flex-wrap justify-end gap-1.5">
+                  <Button variant="ghost" size="sm" onClick={() => edit(t)}>
+                    Editar
+                  </Button>
+                  <Button variant="danger" size="sm" onClick={() => remove(t)}>
+                    Eliminar
+                  </Button>
+                </div>
+              );
+
+              if (view === 'tarjetas') {
+                return (
+                  <ListItem
+                    key={t.id}
+                    index={i}
+                    editing={editingId === t.id}
+                    className={cn('flex-col flex-nowrap items-stretch gap-2.5 border-t-[3px] p-4', PRIORITY_EDGE[t.priority])}
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      {priority}
+                      {deadline}
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <span className="text-base leading-snug">{name}</span>
+                      {t.description && <p className="line-clamp-3 text-[13px] text-ink-2">{t.description}</p>}
+                    </div>
+                    <div className="mt-auto flex flex-wrap items-center justify-between gap-2 border-t border-grid pt-2.5">
+                      {status}
+                      {actions}
+                    </div>
+                  </ListItem>
+                );
+              }
+
               return (
-                <li key={t.id} className={`list-item task ${t.status === 'completada' ? 'done' : ''}`}>
-                  <div className="list-body">
-                    <div className="task-top">
-                      <strong className="task-name">{t.name}</strong>
-                      <span className={`tag prio-${t.priority}`}>Prioridad {PRIORITY_LABEL[t.priority].toLowerCase()}</span>
+                <ListItem key={t.id} index={i} editing={editingId === t.id}>
+                  <div className="flex min-w-0 flex-1 flex-col gap-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      {name}
+                      {priority}
                     </div>
-                    {t.description && <p className="muted small">{t.description}</p>}
-                    <div className="task-meta">
-                      <span className={`deadline dl-${dl.tone}`}>
-                        📅 {formatDM(fromISO(t.deadline))} · {dl.text}
-                      </span>
-                      <select
-                        className={`input status-select st-${t.status}`}
-                        value={t.status}
-                        onChange={(e) => setStatus(t, e.target.value as TaskStatus)}
-                        aria-label="Cambiar estado"
-                      >
-                        {Object.entries(STATUS_LABEL).map(([k, v]) => (
-                          <option key={k} value={k}>
-                            {v}
-                          </option>
-                        ))}
-                      </select>
+                    {t.description && <p className="text-[13px] text-ink-2">{t.description}</p>}
+                    <div className="mt-1 flex flex-wrap items-center gap-2.5">
+                      {deadline}
+                      {status}
                     </div>
                   </div>
-                  <div className="list-actions">
-                    <button className="btn ghost small" onClick={() => edit(t)}>
-                      Editar
-                    </button>
-                    <button className="btn danger small" onClick={() => remove(t)}>
-                      Eliminar
-                    </button>
-                  </div>
-                </li>
+                  {actions}
+                </ListItem>
               );
             })}
-          </ul>
+          </List>
         )}
-      </section>
-    </div>
+      </Card>
+    </TwoCol>
   );
 }

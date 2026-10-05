@@ -13,6 +13,12 @@ Content-Type: application/json
 
 { "email": "yo@ejemplo.com", "password": "cambia-esto-123", "fullName": "Mi Nombre" }
 
+### Registro de una empresa (solo planificación, disciplinas y pendientes; finanzas y nutrición responden 403)
+POST {{base}}/auth/register
+Content-Type: application/json
+
+{ "email": "empresa@ejemplo.com", "password": "cambia-esto-123", "fullName": "Mi Empresa C.A.", "accountType": "BUSINESS" }
+
 ### Login (guarda el token para las siguientes peticiones)
 # @name login
 POST {{base}}/auth/login

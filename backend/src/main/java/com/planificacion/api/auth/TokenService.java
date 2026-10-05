@@ -23,6 +23,9 @@ import java.util.List;
 @Service
 public class TokenService {
 
+    /** Claim con el tipo de cuenta; la seguridad lo usa para cerrar módulos a las cuentas de empresa. */
+    public static final String ACCOUNT_TYPE_CLAIM = "account_type";
+
     private static final SecureRandom RANDOM = new SecureRandom();
 
     private final JwtEncoder encoder;
@@ -49,6 +52,7 @@ public class TokenService {
                 .claim("email", user.getEmail())
                 .claim("name", user.getFullName())
                 .claim("roles", List.of(user.getRole().name()))
+                .claim(ACCOUNT_TYPE_CLAIM, user.getAccountType().name())
                 .build();
         JwsHeader header = JwsHeader.with(MacAlgorithm.HS256).build();
         String token = encoder.encode(JwtEncoderParameters.from(header, claims)).getTokenValue();
