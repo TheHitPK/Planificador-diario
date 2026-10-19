@@ -1,58 +1,57 @@
 # Planificación diaria
 
-Dashboard personal para disciplinas diarias, pendientes, finanzas y nutrición.
-Frontend en React + Vite; los datos se guardan en una API Spring Boot + PostgreSQL con login.
+Planificación personal o de un negocio: disciplinas diarias, pendientes, finanzas y nutrición.
+Una sola API y dos aplicaciones que la usan.
 
-## Uso
+| Carpeta | Qué es | Tecnología |
+|---|---|---|
+| [`backend/`](backend/README.md) | API REST con login, base de datos e informe en Excel | Spring Boot 4.1 (Java 21) + PostgreSQL 17 |
+| [`web/`](web/README.md) | Aplicación web | React 19 + Vite + Tailwind CSS + Motion |
+| [`mobile/`](mobile/README.md) | App nativa para Android e iOS | Flutter 3.47 (Dart) + Riverpod |
 
-Primero el backend (ver [backend/README.md](backend/README.md)):
+## Arrancar en local
 
-```bash
-cd backend
-docker compose up -d          # PostgreSQL
-./mvnw spring-boot:run        # API en http://localhost:8080
-```
+1. **Base de datos y API** (en una terminal):
 
-Luego el frontend:
+   ```bash
+   cd backend
+   docker compose up -d          # PostgreSQL en localhost:5433
+   ./mvnw spring-boot:run        # API en http://localhost:8080
+   ```
 
-```bash
-npm install
-npm run dev      # abre http://localhost:5173
-npm run build    # genera /dist
-```
+2. **Web** (en otra terminal):
 
-La URL de la API se cambia con `VITE_API_URL` (ver `.env.example`).
+   ```bash
+   cd web
+   npm install
+   npm run dev                   # http://localhost:5173
+   ```
 
-### Datos de la versión anterior
+3. **App móvil** (con un emulador de Android abierto o un teléfono conectado):
 
-Si usabas la app antes de tener servidor, tus datos siguen en el navegador. Al crear tu cuenta aparece
-un aviso **“Subir a mi cuenta”** que los migra en un paso (solo con la cuenta vacía). También puedes subir
-un respaldo `.json` con **Importar**.
+   ```bash
+   cd mobile
+   flutter pub get
+   flutter run
+   ```
+
+   En un teléfono físico hay que indicar la IP del PC: `flutter run --dart-define=API_URL=http://192.168.1.50:8080/api`.
+
+Usuario de prueba: `demo@planificacion.dev` / `demo12345`.
 
 ## Tipos de cuenta
 
 Al registrarse se elige **Personal** (todos los módulos) o **Empresa** (solo planificación, disciplinas y pendientes,
-para gestionar las actividades diarias del negocio). La API rechaza finanzas y nutrición a las cuentas de empresa.
-
-## Exportar e importar
-
-- **Informe en Excel**: `Exportar → Informe en Excel` descarga un `.xlsx` generado por el servidor, con una hoja de resumen
-  (indicadores y gráficos) y una hoja por módulo con el detalle.
-- **Respaldo de datos**: `Exportar → Respaldo de datos` descarga un `.json` con todo; es el archivo que acepta `Importar`
-  (solo en una cuenta vacía).
+para gestionar las actividades diarias del negocio). La API rechaza finanzas y nutrición a las cuentas de empresa,
+así que la regla vale igual en la web y en el móvil.
 
 ## Módulos
 
-- **Planificación diaria**: semana actual (lunes a domingo) con checkboxes por disciplina, total por día con semáforo (🔴 < 40 %, 🟡 40–99 %, 🟢 100 %) y estadísticas de hoy, semana, mes y año.
+- **Planificación diaria**: semana de lunes a domingo, disciplinas marcadas por día con semáforo (🔴 < 40 %, 🟡 40–99 %, 🟢 100 %) y estadísticas de hoy, semana, mes y año.
 - **Mis disciplinas**: agregar, editar, reordenar y eliminar disciplinas (icono, nombre, descripción).
-- **Pendientes**: tareas con nombre, descripción, estado, prioridad y plazo. Se ven como lista o como tarjetas.
-- **Finanzas**: entradas y salidas en $ (Zelle, efectivo, USDT) o Bs (efectivo, transferencia, Pago Móvil). Tasa BCV $ y € automática (ve.dolarapi.com) o manual, tasa de compra de USDT, cambios y ventas de divisas, gastos vs costos, saldos por cuenta y calculadora.
-- **Nutrición**: diario de comidas con calorías, proteínas, carbohidratos, grasas y fibra frente a tus objetivos; lista de alimentos editable; registro de peso, % de grasa y cintura con gráficos; cálculo de objetivos (Katch-McArdle o Mifflin-St Jeor según tu actividad y meta).
+- **Pendientes**: tareas con descripción, estado, prioridad y plazo. Se ven como lista o como tarjetas.
+- **Finanzas**: entradas y salidas en $ (Zelle, efectivo, USDT) o Bs (efectivo, transferencia, Pago Móvil), tasa BCV, saldos por cuenta, gastos vs costos y gráficos.
+- **Nutrición**: diario de comidas con calorías y macros frente a tus objetivos, y registro de peso y composición corporal.
 
-## Estructura
-
-- `src/api/`: cliente HTTP con JWT (renovación automática), sesión, conversión de datos y un store por módulo.
-- `src/components`, `src/finance`, `src/nutrition`: la interfaz de cada módulo.
-- `src/ui/`: piezas base (botón, tarjeta, campos, tabla, capas parallax) hechas con Tailwind CSS y Motion.
-- `src/styles.css`: solo los tokens de diseño (colores, radios, sombras, animaciones) para Tailwind; no hay CSS por componente.
-- `backend/`: API REST, ver [backend/README.md](backend/README.md).
+Lo que solo está en la web: cambios de divisas, calculadora, tasa escrita a mano, catálogo de alimentos, objetivos
+nutricionales, respaldo `.json` e importación. El informe en Excel se descarga desde las dos.
