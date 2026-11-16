@@ -1,43 +1,45 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { useLocalStorage } from '../lib/storage';
 import type { FinanceData, Movement, Rates } from './types';
-import { fetchBcvRates } from './rates';
 import { toISO, today } from '../lib/dates';
 import FinanceSummary from './FinanceSummary';
 import MovementsPage from './MovementsPage';
+import { ArrowDownIcon, ArrowUpIcon, BarChartIcon } from '../components/Icons';
+import { Chip, Stack } from '../ui';
+
+const SUBTABS: [SubTab, string, ReactNode][] = [
+  ['resumen', 'Resumen', <BarChartIcon size={16} />],
+  ['entrada', 'Entradas', <ArrowDownIcon size={16} />],
+  ['salida', 'Salidas', <ArrowUpIcon size={16} />],
+];
 
 type SubTab = 'resumen' | 'entrada' | 'salida';
 
 interface Props {
   data: FinanceData;
-  setMovements: (fn: (prev: Movement[]) => Movement[]) => void;
-  setRates: (r: Rates) => void;
-  setRateHistory: (fn: (prev: FinanceData['rateHistory']) => FinanceData['rateHistory']) => void;
+  onAdd: (items: Movement[]) => void;
+  onUpdate: (m: Movement) => void;
+  onDelete: (m: Movement) => void;
+  /** Pide al servidor la tasa BCV del día. Lanza si falla. */
+  onRefreshRates: () => Promise<void>;
+  onSaveRates: (r: Rates) => void;
 }
 
 export type RateStatus = { state: 'idle' | 'loading' } | { state: 'error'; message: string };
 
-export default function FinanceModule({ data, setMovements, setRates, setRateHistory }: Props) {
+export default function FinanceModule({ data, onAdd, onUpdate, onDelete, onRefreshRates, onSaveRates }: Props) {
   const [tab, setTab] = useLocalStorage<SubTab>('pd.fin.tab', 'resumen');
   const [rateStatus, setRateStatus] = useState<RateStatus>({ state: 'idle' });
-
-  const saveRates = useCallback(
-    (r: Rates) => {
-      setRates(r);
-      setRateHistory((prev) => ({ ...prev, [r.date]: { usd: r.usd, eur: r.eur } }));
-    },
-    [setRates, setRateHistory],
-  );
 
   const refreshRates = useCallback(async () => {
     setRateStatus({ state: 'loading' });
     try {
-      saveRates(await fetchBcvRates());
+      await onRefreshRates();
       setRateStatus({ state: 'idle' });
     } catch {
       setRateStatus({ state: 'error', message: 'No se pudo obtener la tasa BCV. Revisa tu conexión o escríbela a mano.' });
     }
-  }, [saveRates]);
+  }, [onRefreshRates]);
 
   // Al abrir el módulo, actualiza la tasa si no hay o si es de un día anterior.
   useEffect(() => {
@@ -46,45 +48,24 @@ export default function FinanceModule({ data, setMovements, setRates, setRateHis
     // Solo al montar el módulo
   }, []);
 
-  const addMovements = (items: Movement[]) => setMovements((prev) => [...prev, ...items]);
-  const updateMovement = (m: Movement) => setMovements((prev) => prev.map((x) => (x.id === m.id ? m : x)));
-  const deleteMovement = (m: Movement) =>
-    setMovements((prev) => prev.filter((x) => x.id !== m.id && !(m.linkId && x.linkId === m.linkId)));
-
-  const pageProps = {
-    data,
-    onAdd: addMovements,
-    onUpdate: updateMovement,
-    onDelete: deleteMovement,
-  };
+  const pageProps = { data, onAdd, onUpdate, onDelete };
 
   return (
-    <div className="finance">
-      <div className="subtabs" role="tablist">
-        {(
-          [
-            ['resumen', '📊 Resumen'],
-            ['entrada', '⬇ Entradas'],
-            ['salida', '⬆ Salidas'],
-          ] as [SubTab, string][]
-        ).map(([id, label]) => (
-          <button
-            key={id}
-            role="tab"
-            aria-selected={tab === id}
-            className={`chip big ${tab === id ? 'active' : ''}`}
-            onClick={() => setTab(id)}
-          >
+    <Stack>
+      <div className="flex flex-wrap gap-2" role="tablist">
+        {SUBTABS.map(([id, label, icon]) => (
+          <Chip key={id} big role="tab" aria-selected={tab === id} active={tab === id} onClick={() => setTab(id)}>
+            {icon}
             {label}
-          </button>
+          </Chip>
         ))}
       </div>
 
       {tab === 'resumen' && (
-        <FinanceSummary data={data} rateStatus={rateStatus} onRefreshRates={refreshRates} onSaveRates={saveRates} />
+        <FinanceSummary data={data} rateStatus={rateStatus} onRefreshRates={refreshRates} onSaveRates={onSaveRates} />
       )}
       {tab === 'entrada' && <MovementsPage kind="entrada" {...pageProps} />}
       {tab === 'salida' && <MovementsPage kind="salida" {...pageProps} />}
-    </div>
+    </Stack>
   );
 }

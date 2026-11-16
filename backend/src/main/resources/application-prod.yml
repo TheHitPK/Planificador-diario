@@ -1,0 +1,40 @@
+# Perfil de producción: se activa con SPRING_PROFILES_ACTIVE=prod.
+# Variables obligatorias: DB_URL, DB_USER, DB_PASSWORD, JWT_SECRET, CORS_ALLOWED_ORIGINS,
+# FRONTEND_URL, MAIL_FROM, BREVO_API_KEY.
+# No hay valores por defecto para secretos: si falta alguno, la app no arranca.
+
+spring:
+  datasource:
+    url: ${DB_URL}
+    username: ${DB_USER}
+    password: ${DB_PASSWORD}
+    hikari:
+      # Pocas conexiones: los planes gratis de Neon/Supabase limitan las conexiones.
+      maximum-pool-size: 5
+      # Sin conexiones fijas abiertas: si el pool no suelta las conexiones,
+      # Neon nunca se duerme y gasta las horas de cómputo del plan gratis.
+      # (Hikari usa milisegundos.)
+      minimum-idle: 0
+      idle-timeout: 60000      # 1 min
+      max-lifetime: 300000     # 5 min
+      # Margen para que Neon despierte si estaba dormido.
+      connection-timeout: 30000  # 30 s
+
+app:
+  cors:
+    allowed-origins: ${CORS_ALLOWED_ORIGINS}
+  mail:
+    # Obligatorias en producción: sin ellas nadie podría verificar su cuenta.
+    frontend-url: ${FRONTEND_URL}
+    from-email: ${MAIL_FROM}
+    brevo-api-key: ${BREVO_API_KEY}
+
+server:
+  # Detrás del proxy HTTPS de Render u otro: respeta X-Forwarded-*.
+  forward-headers-strategy: framework
+
+management:
+  health:
+    # El health check no consulta la BD, así no despierta a Neon por cada ping.
+    db:
+      enabled: false
