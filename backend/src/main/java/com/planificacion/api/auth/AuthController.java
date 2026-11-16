@@ -1,9 +1,13 @@
 package com.planificacion.api.auth;
 
 import com.planificacion.api.auth.AuthDtos.AuthResponse;
+import com.planificacion.api.auth.AuthDtos.EmailRequest;
 import com.planificacion.api.auth.AuthDtos.LoginRequest;
 import com.planificacion.api.auth.AuthDtos.RefreshRequest;
 import com.planificacion.api.auth.AuthDtos.RegisterRequest;
+import com.planificacion.api.auth.AuthDtos.RegisterResponse;
+import com.planificacion.api.auth.AuthDtos.ResetPasswordRequest;
+import com.planificacion.api.auth.AuthDtos.VerifyEmailRequest;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -24,7 +28,7 @@ public class AuthController {
 
     @PostMapping("/register")
     @ResponseStatus(HttpStatus.CREATED)
-    public AuthResponse register(@Valid @RequestBody RegisterRequest req) {
+    public RegisterResponse register(@Valid @RequestBody RegisterRequest req) {
         return auth.register(req);
     }
 
@@ -42,5 +46,30 @@ public class AuthController {
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void logout(@Valid @RequestBody RefreshRequest req) {
         auth.logout(req.refreshToken());
+    }
+
+    @PostMapping("/verify-email")
+    public AuthResponse verifyEmail(@Valid @RequestBody VerifyEmailRequest req) {
+        return auth.verifyEmail(req.token());
+    }
+
+    /** Siempre 202, exista o no la cuenta. */
+    @PostMapping("/resend-verification")
+    @ResponseStatus(HttpStatus.ACCEPTED)
+    public void resendVerification(@Valid @RequestBody EmailRequest req) {
+        auth.resendVerification(req.email());
+    }
+
+    /** Siempre 202, exista o no la cuenta. */
+    @PostMapping("/forgot-password")
+    @ResponseStatus(HttpStatus.ACCEPTED)
+    public void forgotPassword(@Valid @RequestBody EmailRequest req) {
+        auth.forgotPassword(req.email());
+    }
+
+    @PostMapping("/reset-password")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void resetPassword(@Valid @RequestBody ResetPasswordRequest req) {
+        auth.resetPassword(req.token(), req.newPassword());
     }
 }

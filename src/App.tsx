@@ -56,7 +56,7 @@ export default function App() {
         <span>Cargando…</span>
       </div>
     );
-  if (state.status === 'anon') return <AuthScreen notice={state.reason} />;
+  if (state.status === 'anon') return <AuthScreen notice={state.reason} resetToken={state.resetToken} />;
   // key: al cambiar de usuario se descarta todo el estado del anterior
   return <Dashboard key={state.user.id} user={state.user} />;
 }

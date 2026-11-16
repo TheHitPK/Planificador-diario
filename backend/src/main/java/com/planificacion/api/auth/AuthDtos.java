@@ -28,6 +28,22 @@ public final class AuthDtos {
     public record RefreshRequest(@NotBlank String refreshToken) {
     }
 
+    /** Tras registrarse no hay sesión: primero hay que confirmar el correo. */
+    public record RegisterResponse(String email, boolean verificationRequired) {
+    }
+
+    /** Para reenviar la verificación o pedir el enlace de recuperación. */
+    public record EmailRequest(@NotBlank @Email @Size(max = 255) String email) {
+    }
+
+    public record VerifyEmailRequest(@NotBlank @Size(max = 100) String token) {
+    }
+
+    public record ResetPasswordRequest(
+            @NotBlank @Size(max = 100) String token,
+            @NotBlank @Size(min = 8, max = 72, message = "La contraseña debe tener entre 8 y 72 caracteres") String newPassword) {
+    }
+
     public record AuthResponse(
             String tokenType,
             String accessToken,

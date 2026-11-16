@@ -1,0 +1,72 @@
+# Copia diaria de la base principal (Neon) a la base de respaldo (Supabase).
+#
+# Secretos necesarios (Settings > Secrets and variables > Actions):
+#   NEON_DATABASE_URL      Cadena de conexión DIRECTA de Neon (sin "-pooler" en el host).
+#   SUPABASE_DATABASE_URL  Cadena del "Session pooler" de Supabase (puerto 5432).
+#                          La conexión directa de Supabase es solo IPv6 y GitHub Actions no la alcanza.
+#
+# Ambas en formato: postgresql://usuario:password@host:5432/base?sslmode=require
+#
+# El respaldo reemplaza por completo el esquema "public" de Supabase en una sola
+# transacción: si algo falla, Supabase queda como estaba (con la copia anterior).
+
+name: Respaldo Neon -> Supabase
+
+on:
+  schedule:
+    - cron: "0 6 * * *" # Todos los días a las 06:00 UTC (02:00 en Venezuela)
+  workflow_dispatch: # Permite lanzarlo a mano desde la pestaña Actions
+
+concurrency:
+  group: db-backup
+  cancel-in-progress: false
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      PG_BIN: /usr/lib/postgresql/17/bin
+    steps:
+      - name: Instalar cliente PostgreSQL 17
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-common
+          sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y
+          sudo apt-get install -y -qq postgresql-client-17
+
+      - name: Volcar la base de Neon
+        env:
+          NEON_URL: ${{ secrets.NEON_DATABASE_URL }}
+        run: |
+          "$PG_BIN/pg_dump" "$NEON_URL" \
+            --schema=public \
+            --no-owner \
+            --no-privileges \
+            --format=plain \
+            --file=dump.sql
+          # El esquema "public" lo recreamos nosotros abajo.
+          sed -i '/^CREATE SCHEMA public;$/d' dump.sql
+          echo "Tamaño del volcado: $(du -h dump.sql | cut -f1)"
+
+      - name: Restaurar en Supabase
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_DATABASE_URL }}
+        run: |
+          {
+            echo 'DROP SCHEMA IF EXISTS public CASCADE;'
+            echo 'CREATE SCHEMA public;'
+            cat dump.sql
+          } > restore.sql
+          "$PG_BIN/psql" "$SUPABASE_URL" \
+            --single-transaction \
+            --set ON_ERROR_STOP=1 \
+            --quiet \
+            --file=restore.sql
+
+      - name: Verificar la copia
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_DATABASE_URL }}
+        run: |
+          "$PG_BIN/psql" "$SUPABASE_URL" --tuples-only --command \
+            "SELECT 'Migraciones Flyway: ' || count(*) FROM public.flyway_schema_history;"

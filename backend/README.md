@@ -55,6 +55,10 @@ Decisiones clave:
 
 - **Sin estado**: cada petición trae `Authorization: Bearer <jwt>`. La validación (firma HS256, expiración, emisor)
   la hace el *resource server* de Spring Security; no hay filtros JWT caseros.
+- **Correo verificado para entrar**. Los enlaces de verificación (24 h) y de recuperación (1 h) son de un solo uso,
+  se guardan hasheados y viajan en el fragmento (`#verify=…`, `#reset=…`) para no quedar en logs ni en el `Referer`.
+  Se envían con la API HTTP de Brevo **después del commit y en segundo plano**; sin `BREVO_API_KEY` se escriben en el log.
+  Entre dos correos del mismo tipo hay 60 s de espera, para que nadie use el formulario para llenar un buzón ajeno.
 - **Access token corto (15 min) + refresh token (30 días)**. El refresh se guarda **hasheado (SHA-256)**,
   **rota en cada uso** y, si alguien reutiliza uno viejo, se revocan todas las sesiones del usuario.
 - **Multiusuario seguro**: el id del usuario sale del token (`@CurrentUserId`), nunca del body/URL.
@@ -171,7 +175,11 @@ Todo bajo `/api`. Salvo `auth/*`, todo requiere `Authorization: Bearer <accessTo
 
 | Módulo | Método y ruta | Qué hace |
 |---|---|---|
-| Auth | `POST /auth/register` · `/auth/login` | Devuelve access + refresh token |
+| Auth | `POST /auth/register` | Crea la cuenta sin verificar y envía el correo de confirmación (no inicia sesión) |
+| | `POST /auth/login` | Devuelve access + refresh token. Cuenta sin verificar → 403 con `code: EMAIL_NOT_VERIFIED` |
+| | `POST /auth/verify-email` | Confirma el correo con el token del enlace e inicia sesión |
+| | `POST /auth/resend-verification` · `/auth/forgot-password` | Envían el correo; siempre 202 (no revelan si la cuenta existe) |
+| | `POST /auth/reset-password` | Nueva contraseña con el token del enlace; cierra todas las sesiones |
 | | `POST /auth/refresh` · `/auth/logout` | Rotar / revocar refresh token |
 | Usuario | `GET/PATCH /users/me` · `PUT /users/me/password` | Perfil y contraseña |
 | Disciplinas | `GET/POST /disciplines` · `GET/PUT/DELETE /disciplines/{id}` | CRUD (`?includeArchived=true`) |

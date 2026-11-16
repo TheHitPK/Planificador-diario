@@ -44,6 +44,13 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         return problem(HttpStatus.UNAUTHORIZED, ex.getMessage());
     }
 
+    @ExceptionHandler(EmailNotVerifiedException.class)
+    ProblemDetail emailNotVerified(EmailNotVerifiedException ex) {
+        ProblemDetail pd = problem(HttpStatus.FORBIDDEN, ex.getMessage());
+        pd.setProperty("code", EmailNotVerifiedException.CODE);
+        return pd;
+    }
+
     @ExceptionHandler(ExternalServiceException.class)
     ProblemDetail externalService(ExternalServiceException ex) {
         log.warn("Servicio externo falló: {}", ex.getMessage(), ex.getCause());

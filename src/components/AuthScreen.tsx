@@ -1,7 +1,7 @@
-import { useState, type FormEvent, type ReactNode } from 'react';
+import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { motion } from 'motion/react';
 import { useAuth } from '../api/AuthContext';
-import type { AccountType } from '../api/client';
+import { authApi, isEmailNotVerified, type AccountType } from '../api/client';
 import { EASE_OUT } from '../lib/motion';
 import { Button, Card, Field, FormError, Hint, Input, Layer, ParallaxScene, Segmented, SegmentedOption, cn, formClass } from '../ui';
 import Backdrop from './Backdrop';
@@ -38,35 +38,114 @@ function FloatCard({ className, children }: { className?: string; children: Reac
   );
 }
 
-export default function AuthScreen({ notice }: { notice?: string }) {
+type Mode = 'login' | 'register' | 'forgot' | 'reset' | 'check-email';
+
+/** Segundos de espera entre reenvíos (la API ignora los que lleguen antes de 60 s). */
+const RESEND_COOLDOWN = 60;
+
+const errorText = (err: unknown) => (err instanceof Error ? err.message : 'No se pudo continuar.');
+
+export default function AuthScreen({ notice, resetToken }: { notice?: string; resetToken?: string }) {
   const { login, register } = useAuth();
-  const [mode, setMode] = useState<'login' | 'register'>('login');
+  const [mode, setMode] = useState<Mode>(resetToken ? 'reset' : 'login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirm, setConfirm] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [fullName, setFullName] = useState('');
   const [accountType, setAccountType] = useState<AccountType>('PERSONAL');
   const [error, setError] = useState('');
+  const [info, setInfo] = useState('');
+  /** El último login falló por correo sin confirmar: se ofrece reenviarlo. */
+  const [unverified, setUnverified] = useState(false);
+  const [cooldown, setCooldown] = useState(0);
   const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (cooldown <= 0) return;
+    const t = setTimeout(() => setCooldown((c) => c - 1), 1000);
+    return () => clearTimeout(t);
+  }, [cooldown]);
+
+  const go = (next: Mode) => {
+    setMode(next);
+    setError('');
+    setInfo('');
+    setUnverified(false);
+    setPassword('');
+    setConfirm('');
+  };
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     setError('');
-    if (mode === 'register' && password.length < 8) return setError('La contraseña debe tener al menos 8 caracteres.');
+    setInfo('');
+    setUnverified(false);
+    if ((mode === 'register' || mode === 'reset') && password.length < 8)
+      return setError('La contraseña debe tener al menos 8 caracteres.');
+    if (mode === 'reset' && password !== confirm) return setError('Las contraseñas no coinciden.');
     setBusy(true);
     try {
-      if (mode === 'login') await login(email.trim(), password);
-      else await register(email.trim(), password, fullName.trim(), accountType);
+      if (mode === 'login') {
+        await login(email.trim(), password);
+        return; // la pantalla se desmonta al entrar
+      }
+      if (mode === 'register') {
+        setEmail(await register(email.trim(), password, fullName.trim(), accountType));
+        go('check-email');
+        setCooldown(RESEND_COOLDOWN);
+      } else if (mode === 'forgot') {
+        await authApi.forgotPassword(email.trim());
+        setInfo('Si hay una cuenta con ese correo, te enviamos un enlace para elegir una contraseña nueva. Revisa también la carpeta de spam.');
+        setCooldown(RESEND_COOLDOWN);
+      } else if (mode === 'reset' && resetToken) {
+        await authApi.resetPassword(resetToken, password);
+        go('login');
+        setInfo('Contraseña actualizada. Ya puedes iniciar sesión.');
+      }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'No se pudo continuar.');
-      setBusy(false);
+      setUnverified(isEmailNotVerified(err));
+      setError(errorText(err));
     }
+    setBusy(false);
   };
 
-  const switchMode = () => {
-    setMode(mode === 'login' ? 'register' : 'login');
+  const resend = async () => {
     setError('');
+    setBusy(true);
+    try {
+      await authApi.resendVerification(email.trim());
+      go('check-email');
+      setInfo('Te enviamos un enlace nuevo. Los anteriores ya no sirven.');
+      setCooldown(RESEND_COOLDOWN);
+    } catch (err) {
+      setError(errorText(err));
+    }
+    setBusy(false);
   };
+
+  const COPY: Record<Mode, { title: string; subtitle: string }> = {
+    login: { title: 'Inicia sesión', subtitle: 'Continúa donde lo dejaste.' },
+    register: { title: 'Crea tu cuenta', subtitle: 'Empieza a planificar tu día en un minuto.' },
+    forgot: { title: 'Recupera tu acceso', subtitle: 'Te enviaremos un enlace para elegir una contraseña nueva.' },
+    reset: { title: 'Elige una contraseña nueva', subtitle: 'Al guardarla se cerrarán tus sesiones abiertas en otros dispositivos.' },
+    'check-email': { title: 'Revisa tu correo', subtitle: `Te enviamos un enlace a ${email} para activar tu cuenta.` },
+  };
+
+  const passwordToggle = (
+    <button
+      type="button"
+      className="absolute top-1/2 right-[3px] grid h-[34px] w-9 -translate-y-1/2 place-items-center rounded-lg text-ink-2 transition-colors duration-150 hover:bg-surface-2 hover:text-ink"
+      onClick={() => setShowPassword(!showPassword)}
+      aria-label={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+      aria-pressed={showPassword}
+    >
+      {showPassword ? <EyeOffIcon /> : <EyeIcon />}
+    </button>
+  );
+
+  const resendLabel = cooldown > 0 ? `Reenviar en ${cooldown} s` : 'Reenviar correo de confirmación';
+  const linkButton = 'font-semibold text-accent-text hover:underline disabled:cursor-default disabled:text-ink-2 disabled:no-underline';
 
   return (
     <div className="relative isolate grid min-h-dvh grid-rows-[auto_1fr] lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)] lg:grid-rows-1">
@@ -174,11 +253,27 @@ export default function AuthScreen({ notice }: { notice?: string }) {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.4, ease: EASE_OUT }}
           >
-            <h1 className="text-[26px] font-extrabold tracking-[-0.02em]">{mode === 'login' ? 'Inicia sesión' : 'Crea tu cuenta'}</h1>
-            <p className="text-ink-2">{mode === 'login' ? 'Continúa donde lo dejaste.' : 'Empieza a planificar tu día en un minuto.'}</p>
+            <h1 className="text-[26px] font-extrabold tracking-[-0.02em]">{COPY[mode].title}</h1>
+            <p className="text-ink-2">{COPY[mode].subtitle}</p>
           </motion.div>
-          {notice && <Hint tone="warn">{notice}</Hint>}
+          {notice && !info && <Hint tone="warn">{notice}</Hint>}
+          {info && (
+            <Hint tone="ok" role="status">
+              {info}
+            </Hint>
+          )}
 
+          {mode === 'check-email' ? (
+            <div className="flex flex-col gap-3">
+              <p className="text-[13.5px] text-ink-2">
+                Ábrelo desde este dispositivo o cualquier otro; el enlace vence en 24 horas. Si no lo ves, revisa la carpeta de spam.
+              </p>
+              {error && <FormError>{error}</FormError>}
+              <Button className="min-h-11 w-full" onClick={resend} disabled={busy || cooldown > 0}>
+                {resendLabel}
+              </Button>
+            </div>
+          ) : (
           <form className={formClass} onSubmit={submit}>
             {mode === 'register' && (
               <>
@@ -213,46 +308,103 @@ export default function AuthScreen({ notice }: { notice?: string }) {
                 </Field>
               </>
             )}
-            <Field label="Email">
-              <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" required autoFocus />
-            </Field>
-            <Field label="Contraseña" as="div" htmlFor="auth-password">
-              <div className="relative">
+            {mode !== 'reset' && (
+              <Field label="Email">
+                <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" required autoFocus />
+              </Field>
+            )}
+            {mode !== 'forgot' && (
+              <Field label={mode === 'reset' ? 'Contraseña nueva' : 'Contraseña'} as="div" htmlFor="auth-password">
+                <div className="relative">
+                  <Input
+                    id="auth-password"
+                    className="pr-[46px]"
+                    type={showPassword ? 'text' : 'password'}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
+                    minLength={mode === 'login' ? undefined : 8}
+                    maxLength={72}
+                    required
+                    autoFocus={mode === 'reset'}
+                  />
+                  {passwordToggle}
+                </div>
+                {mode !== 'login' && <Hint>Mínimo 8 caracteres.</Hint>}
+                {mode === 'login' && (
+                  <button type="button" className={cn(linkButton, 'self-end text-[13px]')} onClick={() => go('forgot')}>
+                    ¿Olvidaste tu contraseña?
+                  </button>
+                )}
+              </Field>
+            )}
+            {mode === 'reset' && (
+              <Field label="Repite la contraseña">
                 <Input
-                  id="auth-password"
-                  className="pr-[46px]"
                   type={showPassword ? 'text' : 'password'}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
-                  minLength={mode === 'register' ? 8 : undefined}
+                  value={confirm}
+                  onChange={(e) => setConfirm(e.target.value)}
+                  autoComplete="new-password"
                   maxLength={72}
                   required
                 />
-                <button
-                  type="button"
-                  className="absolute top-1/2 right-[3px] grid h-[34px] w-9 -translate-y-1/2 place-items-center rounded-lg text-ink-2 transition-colors duration-150 hover:bg-surface-2 hover:text-ink"
-                  onClick={() => setShowPassword(!showPassword)}
-                  aria-label={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
-                  aria-pressed={showPassword}
-                >
-                  {showPassword ? <EyeOffIcon /> : <EyeIcon />}
-                </button>
-              </div>
-              {mode === 'register' && <Hint>Mínimo 8 caracteres.</Hint>}
-            </Field>
+              </Field>
+            )}
             {error && <FormError>{error}</FormError>}
-            <Button type="submit" variant="primary" className="min-h-11 w-full md:min-h-11" disabled={busy}>
+            {unverified && (
+              <button type="button" className={cn(linkButton, 'self-start text-[13px]')} onClick={resend} disabled={busy || cooldown > 0}>
+                {resendLabel}
+              </button>
+            )}
+            <Button
+              type="submit"
+              variant="primary"
+              className="min-h-11 w-full md:min-h-11"
+              disabled={busy || (mode === 'forgot' && cooldown > 0) || (mode === 'reset' && !resetToken)}
+            >
               {busy && <span className="size-[15px] animate-spin rounded-full border-2 border-current border-r-transparent" aria-hidden="true" />}
-              {busy ? 'Un momento…' : mode === 'login' ? 'Entrar' : 'Crear cuenta'}
+              {busy
+                ? 'Un momento…'
+                : {
+                    login: 'Entrar',
+                    register: 'Crear cuenta',
+                    forgot: cooldown > 0 ? `Enviar de nuevo en ${cooldown} s` : 'Enviar enlace',
+                    reset: 'Guardar contraseña',
+                  }[mode]}
             </Button>
           </form>
+          )}
 
           <p className="text-center text-[13px] text-ink-2">
-            {mode === 'login' ? '¿No tienes cuenta?' : '¿Ya tienes cuenta?'}{' '}
-            <button type="button" className="font-semibold text-accent-text hover:underline" onClick={switchMode}>
-              {mode === 'login' ? 'Regístrate' : 'Inicia sesión'}
-            </button>
+            {mode === 'login' && (
+              <>
+                ¿No tienes cuenta?{' '}
+                <button type="button" className={linkButton} onClick={() => go('register')}>
+                  Regístrate
+                </button>
+              </>
+            )}
+            {mode === 'register' && (
+              <>
+                ¿Ya tienes cuenta?{' '}
+                <button type="button" className={linkButton} onClick={() => go('login')}>
+                  Inicia sesión
+                </button>
+              </>
+            )}
+            {mode === 'reset' && error && (
+              <>
+                <button type="button" className={linkButton} onClick={() => go('forgot')}>
+                  Pedir un enlace nuevo
+                </button>
+                {' · '}
+              </>
+            )}
+            {(mode === 'forgot' || mode === 'reset' || mode === 'check-email') && (
+              <button type="button" className={linkButton} onClick={() => go('login')}>
+                Volver a iniciar sesión
+              </button>
+            )}
           </p>
         </Card>
       </main>

@@ -2,6 +2,8 @@ package com.planificacion.api;
 
 import com.jayway.jsonpath.JsonPath;
 import com.planificacion.api.finance.BcvRateClient;
+import com.planificacion.api.mail.EmailMessage;
+import com.planificacion.api.mail.EmailSender;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -25,11 +27,14 @@ import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.hasItem;
 import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.notNullValue;
+import static org.mockito.Mockito.mockingDetails;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.request;
@@ -55,7 +60,82 @@ class ApiIntegrationTest {
     @MockitoBean
     BcvRateClient bcv;
 
+    /** Los correos no salen: se leen los enlaces de lo que se habría enviado. */
+    @MockitoBean
+    EmailSender mail;
+
     // ------------------------------------------------------------------ auth
+
+    @Test
+    void registroExigeConfirmarElCorreo() throws Exception {
+        String email = uniqueEmail();
+        call(HttpMethod.POST, "/api/auth/register", null, registerBody(email))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.email").value(email))
+                .andExpect(jsonPath("$.verificationRequired").value(true))
+                .andExpect(jsonPath("$.accessToken").doesNotExist());
+
+        // Contraseña correcta pero sin verificar → 403 con código para ofrecer reenviar
+        call(HttpMethod.POST, "/api/auth/login", null, loginBody(email, "secreta123"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("EMAIL_NOT_VERIFIED"));
+        // Contraseña incorrecta → sigue siendo 401 genérico (no revela que la cuenta existe)
+        call(HttpMethod.POST, "/api/auth/login", null, loginBody(email, "incorrecta"))
+                .andExpect(status().isUnauthorized());
+
+        // El enlace del correo inicia sesión directamente…
+        String link = awaitLinkToken(email, "verify");
+        call(HttpMethod.POST, "/api/auth/verify-email", null, tokenBody(link))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.accessToken", notNullValue()));
+        // …solo una vez
+        call(HttpMethod.POST, "/api/auth/verify-email", null, tokenBody(link))
+                .andExpect(status().isUnprocessableContent());
+        call(HttpMethod.POST, "/api/auth/verify-email", null, tokenBody("inventado"))
+                .andExpect(status().isUnprocessableContent());
+
+        call(HttpMethod.POST, "/api/auth/login", null, loginBody(email, "secreta123")).andExpect(status().isOk());
+    }
+
+    @Test
+    void reenviarVerificacionNoRevelaSiLaCuentaExiste() throws Exception {
+        call(HttpMethod.POST, "/api/auth/resend-verification", null, emailBody(uniqueEmail()))
+                .andExpect(status().isAccepted());
+        call(HttpMethod.POST, "/api/auth/forgot-password", null, emailBody(uniqueEmail()))
+                .andExpect(status().isAccepted());
+        // Una cuenta ya verificada tampoco recibe otro correo de verificación
+        String email = uniqueEmail();
+        register(email);
+        int sent = sentTo(email).size();
+        call(HttpMethod.POST, "/api/auth/resend-verification", null, emailBody(email)).andExpect(status().isAccepted());
+        Thread.sleep(300);
+        assertThat(sentTo(email)).hasSize(sent);
+    }
+
+    @Test
+    void recuperarContrasenaCambiaLaClaveYCierraLasSesiones() throws Exception {
+        String email = uniqueEmail();
+        String session = registerAndVerify(registerBody(email), email);
+        String oldRefresh = JsonPath.read(session, "$.refreshToken");
+
+        call(HttpMethod.POST, "/api/auth/forgot-password", null, emailBody(email.toUpperCase()))
+                .andExpect(status().isAccepted());
+        String link = awaitLinkToken(email, "reset");
+
+        // Contraseña demasiado corta → 400
+        call(HttpMethod.POST, "/api/auth/reset-password", null, resetBody(link, "corta"))
+                .andExpect(status().isBadRequest());
+        call(HttpMethod.POST, "/api/auth/reset-password", null, resetBody(link, "nuevaClave456"))
+                .andExpect(status().isNoContent());
+        // El enlace no sirve dos veces
+        call(HttpMethod.POST, "/api/auth/reset-password", null, resetBody(link, "otraClave789"))
+                .andExpect(status().isUnprocessableContent());
+
+        // La contraseña vieja ya no entra, la nueva sí, y las sesiones previas quedaron cerradas
+        call(HttpMethod.POST, "/api/auth/login", null, loginBody(email, "secreta123")).andExpect(status().isUnauthorized());
+        call(HttpMethod.POST, "/api/auth/login", null, loginBody(email, "nuevaClave456")).andExpect(status().isOk());
+        call(HttpMethod.POST, "/api/auth/refresh", null, refreshBody(oldRefresh)).andExpect(status().isUnauthorized());
+    }
 
     @Test
     void registroLoginYPerfil() throws Exception {
@@ -92,12 +172,11 @@ class ApiIntegrationTest {
         call(HttpMethod.GET, "/api/users/me", personal, null).andExpect(jsonPath("$.accountType").value("PERSONAL"));
         call(HttpMethod.GET, "/api/finance/summary", personal, null).andExpect(status().isOk());
 
-        String body = call(HttpMethod.POST, "/api/auth/register", null, """
+        String acme = uniqueEmail();
+        String body = registerAndVerify("""
                 {"email":"%s","password":"secreta123","fullName":"Acme C.A.","accountType":"BUSINESS"}"""
-                .formatted(uniqueEmail()))
-                .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.user.accountType").value("BUSINESS"))
-                .andReturn().getResponse().getContentAsString();
+                .formatted(acme), acme);
+        assertThat((String) JsonPath.read(body, "$.user.accountType")).isEqualTo("BUSINESS");
         String empresa = JsonPath.read(body, "$.accessToken");
 
         call(HttpMethod.GET, "/api/disciplines", empresa, null).andExpect(status().isOk());
@@ -114,8 +193,7 @@ class ApiIntegrationTest {
     @Test
     void refreshTokenRotaYDetectaReutilizacion() throws Exception {
         String email = uniqueEmail();
-        String body = call(HttpMethod.POST, "/api/auth/register", null, registerBody(email))
-                .andReturn().getResponse().getContentAsString();
+        String body = registerAndVerify(registerBody(email), email);
         String refresh1 = JsonPath.read(body, "$.refreshToken");
 
         String rotated = call(HttpMethod.POST, "/api/auth/refresh", null, refreshBody(refresh1))
@@ -399,9 +477,10 @@ class ApiIntegrationTest {
         }
 
         // Una empresa no lleva hojas de finanzas ni de nutrición
-        String body = call(HttpMethod.POST, "/api/auth/register", null, """
+        String acme = uniqueEmail();
+        String body = registerAndVerify("""
                 {"email":"%s","password":"secreta123","fullName":"Acme C.A.","accountType":"BUSINESS"}"""
-                .formatted(uniqueEmail())).andReturn().getResponse().getContentAsString();
+                .formatted(acme), acme);
         byte[] business = call(HttpMethod.GET, "/api/export/excel", JsonPath.read(body, "$.accessToken"), null)
                 .andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsByteArray();
@@ -425,11 +504,59 @@ class ApiIntegrationTest {
         return mvc.perform(req);
     }
 
+    /** Registra, confirma el correo con el enlace recibido y devuelve el access token. */
     private String register(String email) throws Exception {
-        String body = call(HttpMethod.POST, "/api/auth/register", null, registerBody(email))
-                .andExpect(status().isCreated())
+        return JsonPath.read(registerAndVerify(registerBody(email), email), "$.accessToken");
+    }
+
+    /** Registra, confirma el correo y devuelve la respuesta de sesión (tokens + usuario). */
+    private String registerAndVerify(String registerJson, String email) throws Exception {
+        call(HttpMethod.POST, "/api/auth/register", null, registerJson).andExpect(status().isCreated());
+        return call(HttpMethod.POST, "/api/auth/verify-email", null, tokenBody(awaitLinkToken(email, "verify")))
+                .andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString();
-        return JsonPath.read(body, "$.accessToken");
+    }
+
+    /** Correos que se habrían enviado a esa dirección (el envío es asíncrono). */
+    private List<EmailMessage> sentTo(String email) {
+        return mockingDetails(mail).getInvocations().stream()
+                .map(inv -> (EmailMessage) inv.getArgument(0))
+                .filter(m -> m.to().equals(email))
+                .toList();
+    }
+
+    /** Espera el correo y extrae el token del enlace ({@code #verify=...} o {@code #reset=...}). */
+    private String awaitLinkToken(String email, String kind) throws InterruptedException {
+        Pattern link = Pattern.compile("#" + kind + "=([A-Za-z0-9_-]+)");
+        for (int i = 0; i < 50; i++) {
+            List<EmailMessage> sent = sentTo(email);
+            for (int j = sent.size() - 1; j >= 0; j--) {
+                Matcher m = link.matcher(sent.get(j).text());
+                if (m.find()) return m.group(1);
+            }
+            Thread.sleep(100);
+        }
+        throw new AssertionError("No llegó el correo '" + kind + "' a " + email);
+    }
+
+    private static String loginBody(String email, String password) {
+        return """
+                {"email":"%s","password":"%s"}""".formatted(email, password);
+    }
+
+    private static String emailBody(String email) {
+        return """
+                {"email":"%s"}""".formatted(email);
+    }
+
+    private static String tokenBody(String token) {
+        return """
+                {"token":"%s"}""".formatted(token);
+    }
+
+    private static String resetBody(String token, String password) {
+        return """
+                {"token":"%s","newPassword":"%s"}""".formatted(token, password);
     }
 
     private static String idOf(ResultActions result) throws Exception {

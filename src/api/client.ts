@@ -32,10 +32,15 @@ export class ApiError extends Error {
     public status: number,
     message: string,
     public errors?: Record<string, string>,
+    /** Código de error de la API, p. ej. 'EMAIL_NOT_VERIFIED'. */
+    public code?: string,
   ) {
     super(message);
   }
 }
+
+/** El login falló porque la cuenta aún no confirmó su correo. */
+export const isEmailNotVerified = (err: unknown) => err instanceof ApiError && err.code === 'EMAIL_NOT_VERIFIED';
 
 let accessToken: string | null = null;
 let refreshing: Promise<boolean> | null = null;
@@ -89,10 +94,10 @@ async function send(method: string, path: string, body?: unknown): Promise<Respo
 /** Convierte una respuesta problem+json en un error con mensaje legible. */
 async function toError(res: Response): Promise<ApiError> {
   try {
-    const p = (await res.json()) as { detail?: string; errors?: Record<string, string> };
+    const p = (await res.json()) as { detail?: string; errors?: Record<string, string>; code?: string };
     const first = p.errors ? Object.entries(p.errors)[0] : undefined;
     const message = first ? `${p.detail ?? 'Datos inválidos'}: ${first[0]} ${first[1]}` : p.detail;
-    return new ApiError(res.status, message ?? `Error ${res.status}`, p.errors);
+    return new ApiError(res.status, message ?? `Error ${res.status}`, p.errors, p.code);
   } catch {
     return new ApiError(res.status, `Error ${res.status}`);
   }
@@ -161,10 +166,27 @@ export const authApi = {
     return res.user;
   },
 
-  async register(email: string, password: string, fullName: string, accountType: AccountType): Promise<ApiUser> {
-    const res = await request<AuthResponse>('POST', '/auth/register', { email, password, fullName, accountType });
+  /** Crea la cuenta sin iniciar sesión: antes hay que confirmar el correo. Devuelve el email registrado. */
+  async register(email: string, password: string, fullName: string, accountType: AccountType): Promise<string> {
+    const res = await request<{ email: string }>('POST', '/auth/register', { email, password, fullName, accountType });
+    return res.email;
+  },
+
+  /** Confirma el correo con el token del enlace e inicia sesión. */
+  async verifyEmail(token: string): Promise<ApiUser> {
+    const res = await request<AuthResponse>('POST', '/auth/verify-email', { token });
     saveSession(res);
     return res.user;
+  },
+
+  resendVerification: (email: string) => request<void>('POST', '/auth/resend-verification', { email }),
+
+  forgotPassword: (email: string) => request<void>('POST', '/auth/forgot-password', { email }),
+
+  /** Cambia la contraseña; la API cierra todas las sesiones, también la de este navegador. */
+  async resetPassword(token: string, newPassword: string): Promise<void> {
+    await request<void>('POST', '/auth/reset-password', { token, newPassword });
+    clearSession();
   },
 
   /** Recupera la sesión al recargar la página, si hay refresh token guardado. */

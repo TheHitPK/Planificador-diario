@@ -10,6 +10,8 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+import java.time.Instant;
+
 @Getter
 @Setter
 @NoArgsConstructor
@@ -37,6 +39,14 @@ public class User extends BaseEntity {
 
     @Column(nullable = false)
     private boolean enabled = true;
+
+    /** Null mientras el usuario no confirme su correo; sin verificar no puede iniciar sesión. */
+    @Column(name = "email_verified_at")
+    private Instant emailVerifiedAt;
+
+    public boolean isEmailVerified() {
+        return emailVerifiedAt != null;
+    }
 
     public User(String email, String passwordHash, String fullName) {
         this(email, passwordHash, fullName, AccountType.PERSONAL);
