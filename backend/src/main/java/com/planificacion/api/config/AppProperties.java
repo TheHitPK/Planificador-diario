@@ -33,11 +33,13 @@ public record AppProperties(@Valid @NotNull Jwt jwt, @Valid @NotNull Cors cors, 
     /**
      * Correos de verificación y recuperación.
      *
+     * @param enabled         false = sin correos: el registro entra directo (sin verificar) y no hay recuperación por email
      * @param frontendUrl     base de los enlaces de los correos (la app web)
      * @param brevoApiKey     clave de la API de Brevo; vacía = los correos solo se escriben en el log (desarrollo)
      * @param resendCooldown  tiempo mínimo entre dos correos del mismo tipo al mismo usuario
      */
     public record Mail(
+            boolean enabled,
             @NotBlank String frontendUrl,
             @NotBlank @Email String fromEmail,
             @NotBlank String fromName,

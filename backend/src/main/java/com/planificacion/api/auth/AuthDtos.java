@@ -28,8 +28,11 @@ public final class AuthDtos {
     public record RefreshRequest(@NotBlank String refreshToken) {
     }
 
-    /** Tras registrarse no hay sesión: primero hay que confirmar el correo. */
-    public record RegisterResponse(String email, boolean verificationRequired) {
+    /**
+     * Con verificación de correo: {@code verificationRequired=true} y sin sesión (llega al confirmar el correo).
+     * Sin ella: {@code session} trae los tokens y el usuario ya puede usar la app.
+     */
+    public record RegisterResponse(String email, boolean verificationRequired, AuthResponse session) {
     }
 
     /** Para reenviar la verificación o pedir el enlace de recuperación. */

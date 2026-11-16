@@ -7,6 +7,8 @@ import com.planificacion.api.auth.AuthDtos.RegisterResponse;
 import com.planificacion.api.common.error.BusinessRuleException;
 import com.planificacion.api.common.error.ConflictException;
 import com.planificacion.api.common.error.EmailNotVerifiedException;
+import com.planificacion.api.common.error.MailDisabledException;
+import com.planificacion.api.config.AppProperties;
 import com.planificacion.api.common.error.InvalidCredentialsException;
 import com.planificacion.api.user.AccountType;
 import com.planificacion.api.user.User;
@@ -37,11 +39,14 @@ public class AuthService {
     private final TokenService tokens;
     private final AccountEmailService accountEmails;
     private final Clock clock;
+    /** {@code app.mail.enabled}: si es false no se verifica el correo ni hay recuperación por email. */
+    private final boolean mailEnabled;
     /** Hash ficticio para que un email inexistente tarde lo mismo que uno real (evita enumerar usuarios). */
     private final String dummyHash;
 
     public AuthService(UserRepository users, RefreshTokenRepository refreshTokens, PasswordEncoder passwordEncoder,
-                       TokenService tokens, AccountEmailService accountEmails, Clock clock) {
+                       TokenService tokens, AccountEmailService accountEmails, AppProperties props, Clock clock) {
+        this.mailEnabled = props.mail().enabled();
         this.users = users;
         this.refreshTokens = refreshTokens;
         this.passwordEncoder = passwordEncoder;
@@ -51,7 +56,10 @@ public class AuthService {
         this.dummyHash = passwordEncoder.encode("dummy-password-for-timing");
     }
 
-    /** Crea la cuenta sin verificar y envía el correo de confirmación. No inicia sesión. */
+    /**
+     * Con el correo activo: crea la cuenta sin verificar, envía la confirmación y no inicia sesión.
+     * Con el correo apagado: la cuenta queda verificada y se inicia sesión directamente.
+     */
     @Transactional
     public RegisterResponse register(RegisterRequest req) {
         String email = normalize(req.email());
@@ -59,10 +67,14 @@ public class AuthService {
             throw new ConflictException("Ya existe una cuenta con ese email");
         }
         AccountType accountType = req.accountType() != null ? req.accountType() : AccountType.PERSONAL;
-        User user = users.save(new User(email, passwordEncoder.encode(req.password()), req.fullName().trim(), accountType));
-        accountEmails.send(user, EmailTokenPurpose.VERIFY_EMAIL);
+        User user = new User(email, passwordEncoder.encode(req.password()), req.fullName().trim(), accountType);
+        if (!mailEnabled) user.setEmailVerifiedAt(clock.instant());
+        user = users.save(user);
         log.info("Usuario registrado {}", user.getId());
-        return new RegisterResponse(user.getEmail(), true);
+
+        if (!mailEnabled) return new RegisterResponse(user.getEmail(), false, issueTokens(user));
+        accountEmails.send(user, EmailTokenPurpose.VERIFY_EMAIL);
+        return new RegisterResponse(user.getEmail(), true, null);
     }
 
     @Transactional
@@ -74,7 +86,7 @@ public class AuthService {
             throw new InvalidCredentialsException(BAD_CREDENTIALS);
         }
         // Solo se revela después de comprobar la contraseña, así no sirve para averiguar qué emails existen.
-        if (!found.get().isEmailVerified()) {
+        if (mailEnabled && !found.get().isEmailVerified()) {
             throw new EmailNotVerifiedException();
         }
         return issueTokens(found.get());
@@ -97,6 +109,7 @@ public class AuthService {
     /** Respuesta idéntica exista o no la cuenta (no revela qué emails están registrados). */
     @Transactional
     public void resendVerification(String email) {
+        requireMail();
         users.findByEmail(normalize(email))
                 .filter(u -> u.isEnabled() && !u.isEmailVerified())
                 .ifPresent(u -> accountEmails.send(u, EmailTokenPurpose.VERIFY_EMAIL));
@@ -105,6 +118,7 @@ public class AuthService {
     /** Respuesta idéntica exista o no la cuenta (no revela qué emails están registrados). */
     @Transactional
     public void forgotPassword(String email) {
+        requireMail();
         users.findByEmail(normalize(email))
                 .filter(User::isEnabled)
                 .ifPresent(u -> accountEmails.send(u, EmailTokenPurpose.RESET_PASSWORD));
@@ -180,6 +194,10 @@ public class AuthService {
         refreshTokens.save(new RefreshToken(user.getId(), TokenService.hash(refresh), refreshExpiry));
         return new AuthResponse("Bearer", access.value(), access.expiresAt(), refresh, refreshExpiry,
                 UserResponse.from(user));
+    }
+
+    private void requireMail() {
+        if (!mailEnabled) throw new MailDisabledException();
     }
 
     private static String normalize(String email) {

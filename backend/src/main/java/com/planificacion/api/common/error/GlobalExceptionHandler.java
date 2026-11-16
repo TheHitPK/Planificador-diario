@@ -51,6 +51,11 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         return pd;
     }
 
+    @ExceptionHandler(MailDisabledException.class)
+    ProblemDetail mailDisabled(MailDisabledException ex) {
+        return problem(HttpStatus.SERVICE_UNAVAILABLE, ex.getMessage());
+    }
+
     @ExceptionHandler(ExternalServiceException.class)
     ProblemDetail externalService(ExternalServiceException ex) {
         log.warn("Servicio externo falló: {}", ex.getMessage(), ex.getCause());

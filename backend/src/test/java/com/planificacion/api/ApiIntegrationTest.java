@@ -45,7 +45,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * Recorre la API completa contra un Postgres real (Testcontainers).
  * Se salta automáticamente si Docker no está disponible.
  */
-@SpringBootTest
+@SpringBootTest(properties = "app.mail.enabled=true")
 @AutoConfigureMockMvc
 @Import(TestcontainersConfiguration.class)
 @Testcontainers(disabledWithoutDocker = true)

@@ -44,6 +44,9 @@ app:
   rates:
     base-url: https://ve.dolarapi.com
   mail:
+    # Apagado: el registro entra directo (sin verificar el correo) y no hay recuperación por email.
+    # Encendido: exige confirmar el correo y permite "olvidé mi contraseña" (necesita BREVO_API_KEY).
+    enabled: ${MAIL_ENABLED:false}
     # Los enlaces de los correos apuntan aquí (la app web).
     frontend-url: ${FRONTEND_URL:http://localhost:5173}
     # En Brevo, este remitente debe estar verificado (Senders & IP > Senders).

@@ -10,8 +10,16 @@ type AuthState =
 interface AuthContextValue {
   state: AuthState;
   login: (email: string, password: string) => Promise<void>;
-  /** Devuelve el email registrado; la sesión empieza al confirmar el correo. */
-  register: (email: string, password: string, fullName: string, accountType: AccountType) => Promise<string>;
+  /**
+   * Devuelve el email registrado y si la sesión ya empezó. Si hay que confirmar el correo,
+   * la sesión empieza al abrir el enlace.
+   */
+  register: (
+    email: string,
+    password: string,
+    fullName: string,
+    accountType: AccountType,
+  ) => Promise<{ email: string; signedIn: boolean }>;
   logout: () => Promise<void>;
 }
 
@@ -62,11 +70,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setState({ status: 'authed', user: await authApi.login(email, password) });
   }, []);
 
-  const register = useCallback(
-    (email: string, password: string, fullName: string, accountType: AccountType) =>
-      authApi.register(email, password, fullName, accountType),
-    [],
-  );
+  const register = useCallback(async (email: string, password: string, fullName: string, accountType: AccountType) => {
+    const res = await authApi.register(email, password, fullName, accountType);
+    if (res.user) setState({ status: 'authed', user: res.user });
+    return { email: res.email, signedIn: !!res.user };
+  }, []);
 
   const logout = useCallback(async () => {
     await authApi.logout();

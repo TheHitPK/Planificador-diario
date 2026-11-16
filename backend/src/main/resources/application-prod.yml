@@ -1,6 +1,6 @@
 # Perfil de producción: se activa con SPRING_PROFILES_ACTIVE=prod.
-# Variables obligatorias: DB_URL, DB_USER, DB_PASSWORD, JWT_SECRET, CORS_ALLOWED_ORIGINS,
-# FRONTEND_URL, MAIL_FROM, BREVO_API_KEY.
+# Variables obligatorias: DB_URL, DB_USER, DB_PASSWORD, JWT_SECRET, CORS_ALLOWED_ORIGINS.
+# Con MAIL_ENABLED=true además: BREVO_API_KEY, MAIL_FROM, FRONTEND_URL.
 # No hay valores por defecto para secretos: si falta alguno, la app no arranca.
 
 spring:
@@ -24,10 +24,10 @@ app:
   cors:
     allowed-origins: ${CORS_ALLOWED_ORIGINS}
   mail:
-    # Obligatorias en producción: sin ellas nadie podría verificar su cuenta.
-    frontend-url: ${FRONTEND_URL}
-    from-email: ${MAIL_FROM}
-    brevo-api-key: ${BREVO_API_KEY}
+    # Solo hacen falta con MAIL_ENABLED=true (si falta la clave, la app no arranca).
+    frontend-url: ${FRONTEND_URL:http://localhost:5173}
+    from-email: ${MAIL_FROM:no-reply@planificacion.local}
+    brevo-api-key: ${BREVO_API_KEY:}
 
 server:
   # Detrás del proxy HTTPS de Render u otro: respeta X-Forwarded-*.

@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { motion } from 'motion/react';
 import { useAuth } from '../api/AuthContext';
-import { authApi, isEmailNotVerified, type AccountType } from '../api/client';
+import { EMAIL_ENABLED, authApi, isEmailNotVerified, type AccountType } from '../api/client';
 import { EASE_OUT } from '../lib/motion';
 import { Button, Card, Field, FormError, Hint, Input, Layer, ParallaxScene, Segmented, SegmentedOption, cn, formClass } from '../ui';
 import Backdrop from './Backdrop';
@@ -91,7 +91,9 @@ export default function AuthScreen({ notice, resetToken }: { notice?: string; re
         return; // la pantalla se desmonta al entrar
       }
       if (mode === 'register') {
-        setEmail(await register(email.trim(), password, fullName.trim(), accountType));
+        const res = await register(email.trim(), password, fullName.trim(), accountType);
+        if (res.signedIn) return; // sin verificación de correo: la pantalla se desmonta al entrar
+        setEmail(res.email);
         go('check-email');
         setCooldown(RESEND_COOLDOWN);
       } else if (mode === 'forgot') {
@@ -331,7 +333,7 @@ export default function AuthScreen({ notice, resetToken }: { notice?: string; re
                   {passwordToggle}
                 </div>
                 {mode !== 'login' && <Hint>Mínimo 8 caracteres.</Hint>}
-                {mode === 'login' && (
+                {mode === 'login' && EMAIL_ENABLED && (
                   <button type="button" className={cn(linkButton, 'self-end text-[13px]')} onClick={() => go('forgot')}>
                     ¿Olvidaste tu contraseña?
                   </button>

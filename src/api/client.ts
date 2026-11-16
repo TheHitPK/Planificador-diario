@@ -9,6 +9,9 @@
 const BASE_URL = (import.meta.env.VITE_API_URL as string | undefined) ?? 'http://localhost:8080/api';
 const REFRESH_KEY = 'pd.auth.refresh';
 
+/** El backend envía correos (verificación y recuperación). Debe coincidir con MAIL_ENABLED del backend. */
+export const EMAIL_ENABLED = import.meta.env.VITE_EMAIL_ENABLED === 'true';
+
 /** Una cuenta de empresa solo usa planificación, disciplinas y pendientes. */
 export type AccountType = 'PERSONAL' | 'BUSINESS';
 
@@ -166,10 +169,25 @@ export const authApi = {
     return res.user;
   },
 
-  /** Crea la cuenta sin iniciar sesión: antes hay que confirmar el correo. Devuelve el email registrado. */
-  async register(email: string, password: string, fullName: string, accountType: AccountType): Promise<string> {
-    const res = await request<{ email: string }>('POST', '/auth/register', { email, password, fullName, accountType });
-    return res.email;
+  /**
+   * Crea la cuenta. Si el servidor exige confirmar el correo no hay sesión todavía (`user` vacío);
+   * si no, la sesión empieza ya.
+   */
+  async register(
+    email: string,
+    password: string,
+    fullName: string,
+    accountType: AccountType,
+  ): Promise<{ email: string; user?: ApiUser }> {
+    const res = await request<{ email: string; session: AuthResponse | null }>('POST', '/auth/register', {
+      email,
+      password,
+      fullName,
+      accountType,
+    });
+    if (!res.session) return { email: res.email };
+    saveSession(res.session);
+    return { email: res.email, user: res.session.user };
   },
 
   /** Confirma el correo con el token del enlace e inicia sesión. */
