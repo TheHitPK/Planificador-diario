@@ -34,3 +34,5 @@ build/
 
 ### Entorno ###
 .env
+# Configuración local con secretos (Spring Boot carga ./config/application-<perfil>.yml)
+/config/
