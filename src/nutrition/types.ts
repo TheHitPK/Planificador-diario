@@ -14,6 +14,8 @@ export interface Food extends Macros {
   name: string;
   unit: FoodUnit;
   per: number;
+  /** Del catálogo compartido: solo lectura. */
+  global?: boolean;
 }
 
 export type Meal = 'desayuno' | 'almuerzo' | 'cena' | 'merienda';

@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { motion } from 'motion/react';
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import type { FinanceData, Rates } from './types';
 import { ACCOUNTS, ACCOUNT_CURRENCY, ACCOUNT_ICON, ACCOUNT_LABEL } from './constants';
@@ -8,6 +9,12 @@ import {
 } from './calc';
 import { MONTH_NAMES, MONTH_SHORT, formatDM, fromISO, toISO, today } from '../lib/dates';
 import type { RateStatus } from './FinanceModule';
+import { EASE_OUT } from '../lib/motion';
+import { PencilIcon, RefreshIcon } from '../components/Icons';
+import {
+  BigNumber, Button, Card, CardHead, CardTitle, ChartFrame, ChartTip, Empty, Field, FieldRow, FormActions, Grid2, Hint, Input,
+  MiniStat, MiniStats, Segmented, SegmentedOption, Stack, Swatch, chart, cn,
+} from '../ui';
 
 interface Props {
   data: FinanceData;
@@ -62,125 +69,118 @@ export default function FinanceSummary({ data, rateStatus, onRefreshRates, onSav
   const maxCat = byCategory[0]?.[1] ?? 0;
 
   return (
-    <div className="fin-summary">
+    <Stack>
       <RatesCard rates={rates} status={rateStatus} onRefresh={onRefreshRates} onSave={onSaveRates} avgUsdt={avgUsdt} />
 
-      <section className="card">
-        <h2>Lo que tengo</h2>
+      <Card delay={0.06}>
+        <CardTitle>Lo que tengo</CardTitle>
         {tot ? (
-          <div className="totals">
-            <div className="total-main">
-              <span className="muted small">Total en dólares</span>
-              <span className="hero">{fmtUsd(tot.usd)}</span>
+          <div className="mb-[18px] flex flex-wrap items-end gap-8">
+            <div className="flex flex-col">
+              <span className="text-[13px] text-ink-2">Total en dólares</span>
+              <BigNumber>{fmtUsd(tot.usd)}</BigNumber>
             </div>
-            <div>
-              <span className="muted small">En bolívares (BCV $)</span>
-              <strong>{fmtBs(tot.bs)}</strong>
-            </div>
-            <div>
-              <span className="muted small">En euros (BCV €)</span>
-              <strong>{fmtEur(tot.eur)}</strong>
-            </div>
+            <MiniStat label="En bolívares (BCV $)" value={fmtBs(tot.bs)} />
+            <MiniStat label="En euros (BCV €)" value={fmtEur(tot.eur)} />
           </div>
         ) : (
-          <p className="muted">Carga la tasa BCV para ver tus totales convertidos.</p>
+          <p className="mb-4 text-ink-2">Carga la tasa BCV para ver tus totales convertidos.</p>
         )}
 
-        <div className="accounts-grid">
+        <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
           {ACCOUNTS.map((a) => (
-            <div key={a} className={`account-tile ${bal[a] < 0 ? 'negative' : ''}`}>
-              <div className="account-head">
+            <div
+              key={a}
+              className="flex flex-col gap-0.5 rounded-[14px] border border-line bg-linear-160 from-surface to-field px-3.5 py-3 transition duration-300 ease-out-expo hover:-translate-y-[3px] hover:border-accent/30 hover:shadow-card"
+            >
+              <div className="flex gap-1.5 text-[13px] font-semibold text-ink-2">
                 <span aria-hidden>{ACCOUNT_ICON[a]}</span>
                 <span>{ACCOUNT_LABEL[a]}</span>
               </div>
-              <strong className="account-amount">{fmtAccount(a, bal[a])}</strong>
+              <strong className={cn('font-display text-[19px] tabular-nums', bal[a] < 0 && 'text-bad-ink')}>{fmtAccount(a, bal[a])}</strong>
               {rates && (
-                <span className="muted small">
+                <span className="text-[13px] text-ink-2">
                   ≈ {ACCOUNT_CURRENCY[a] === 'USD' ? fmtBs(toBs(a, bal[a], rates.usd)) : fmtUsd(toUsd(a, bal[a], rates.usd))}
                 </span>
               )}
               {a === 'usdt' && avgUsdt && (
-                <span className="muted small">
+                <span className="text-[13px] text-ink-2">
                   Compra prom.: {fmtNum(avgUsdt)} Bs · {fmtBs(bal[a] * avgUsdt)}
                 </span>
               )}
             </div>
           ))}
         </div>
-      </section>
+      </Card>
 
-      <div className="stats-grid">
-        <section className="card">
-          <h2>{MONTH_NAMES[t.getMonth()]}</h2>
-          <div className="mini-stats">
-            <div>
-              <span className="muted small">Entradas</span>
-              <strong className="amt-in">{fmtUsd(inUsd)}</strong>
-            </div>
-            <div>
-              <span className="muted small">Salidas</span>
-              <strong className="amt-out">{fmtUsd(outUsd)}</strong>
-            </div>
-            <div>
-              <span className="muted small">Balance</span>
-              <strong className={inUsd - outUsd >= 0 ? 'amt-in' : 'amt-neg'}>{fmtUsd(inUsd - outUsd)}</strong>
-            </div>
-          </div>
-          <div className="mini-stats">
-            <div>
-              <span className="muted small">Gastos</span>
-              <strong>{fmtUsd(gastoUsd)}</strong>
-            </div>
-            <div>
-              <span className="muted small">Costos</span>
-              <strong>{fmtUsd(costoUsd)}</strong>
-            </div>
-          </div>
+      <Grid2>
+        <Card>
+          <CardTitle>{MONTH_NAMES[t.getMonth()]}</CardTitle>
+          <MiniStats>
+            <MiniStat label="Entradas" value={fmtUsd(inUsd)} valueClassName="text-good-ink" />
+            <MiniStat label="Salidas" value={fmtUsd(outUsd)} />
+            <MiniStat label="Balance" value={fmtUsd(inUsd - outUsd)} valueClassName={inUsd - outUsd >= 0 ? 'text-good-ink' : 'text-bad-ink'} />
+          </MiniStats>
+          <MiniStats>
+            <MiniStat label="Gastos" value={fmtUsd(gastoUsd)} />
+            <MiniStat label="Costos" value={fmtUsd(costoUsd)} />
+          </MiniStats>
 
-          <h3 className="sub-h">Salidas por categoría</h3>
+          <h3 className="mt-4 mb-2.5">Salidas por categoría</h3>
           {byCategory.length === 0 ? (
-            <p className="empty">Sin salidas este mes.</p>
+            <Empty>Sin salidas este mes.</Empty>
           ) : (
-            <ul className="cat-bars">
-              {byCategory.map(([cat, v]) => (
-                <li key={cat}>
-                  <span className="cat-name">{cat}</span>
-                  <span className="cat-track">
-                    <span className="cat-fill" style={{ width: `${maxCat ? (v / maxCat) * 100 : 0}%` }} />
+            <ul className="m-0 flex list-none flex-col gap-2 p-0">
+              {byCategory.map(([cat, v], i) => (
+                <li key={cat} className="grid grid-cols-[90px_1fr_80px] items-center gap-2.5 text-[13px] sm:grid-cols-[130px_1fr_90px]">
+                  <span className="truncate text-ink-2" title={cat}>
+                    {cat}
                   </span>
-                  <span className="cat-value">{fmtUsd(v)}</span>
+                  <span className="h-2.5 overflow-hidden rounded-full bg-surface-2">
+                    <motion.span
+                      className="block h-full rounded-full bg-linear-to-r from-dawn-400 to-flow-out"
+                      initial={{ width: 0 }}
+                      animate={{ width: `${maxCat ? (v / maxCat) * 100 : 0}%` }}
+                      transition={{ duration: 0.8, ease: EASE_OUT, delay: Math.min(i, 6) * 0.05 }}
+                    />
+                  </span>
+                  <span className="text-right font-semibold tabular-nums">{fmtUsd(v)}</span>
                 </li>
               ))}
             </ul>
           )}
-        </section>
+        </Card>
 
-        <section className="card">
-          <div className="card-head">
+        <Card delay={0.08}>
+          <CardHead>
             <h2>Entradas vs salidas</h2>
-            <div className="legend">
-              <span><i className="sw sw-in" /> Entradas</span>
-              <span><i className="sw sw-out" /> Salidas</span>
+            <div className="flex gap-3.5 text-[13px] text-ink-2">
+              <span className="inline-flex items-center gap-1.5">
+                <Swatch className="bg-flow-in" /> Entradas
+              </span>
+              <span className="inline-flex items-center gap-1.5">
+                <Swatch className="bg-flow-out" /> Salidas
+              </span>
             </div>
-          </div>
-          <p className="muted small">Últimos 6 meses, en $ (sin cambios de divisas)</p>
-          <div className="stat-chart fin-chart">
+          </CardHead>
+          <p className="text-[13px] text-ink-2">Últimos 6 meses, en $ (sin cambios de divisas)</p>
+          <ChartFrame className="mt-2">
             <ResponsiveContainer width="100%" height={240}>
               <BarChart data={chartData} margin={{ top: 12, right: 4, bottom: 0, left: -8 }} barGap={2} barCategoryGap="24%">
-                <CartesianGrid vertical={false} />
-                <XAxis dataKey="label" tickLine={false} tick={{ fontSize: 11, fill: '#898781' }} />
-                <YAxis tickLine={false} axisLine={false} tick={{ fontSize: 11, fill: '#898781' }} tickFormatter={(v) => `$${v}`} />
-                <Tooltip cursor={{ className: 'chart-cursor' }} content={<FinTooltip />} isAnimationActive={false} />
-                <Bar dataKey="entradas" className="bar-in" radius={[4, 4, 0, 0]} maxBarSize={22} isAnimationActive={false} />
-                <Bar dataKey="salidas" className="bar-out" radius={[4, 4, 0, 0]} maxBarSize={22} isAnimationActive={false} />
+                <CartesianGrid vertical={false} stroke={chart.grid} />
+                <XAxis dataKey="label" tickLine={false} axisLine={chart.axis} tick={chart.tick} />
+                <YAxis tickLine={false} axisLine={false} tick={chart.tick} tickFormatter={(v) => `$${v}`} />
+                <Tooltip cursor={chart.barCursor} content={<FinTooltip />} isAnimationActive={false} />
+                <Bar dataKey="entradas" fill="var(--flow-in)" radius={[4, 4, 0, 0]} maxBarSize={22} isAnimationActive={false} />
+                <Bar dataKey="salidas" fill="var(--flow-out)" radius={[4, 4, 0, 0]} maxBarSize={22} isAnimationActive={false} />
               </BarChart>
             </ResponsiveContainer>
-          </div>
-        </section>
-      </div>
+          </ChartFrame>
+        </Card>
+      </Grid2>
 
       <Calculator rates={rates} avgUsdt={avgUsdt} />
-    </div>
+    </Stack>
   );
 }
 
@@ -194,12 +194,15 @@ function FinTooltip({
   if (!active || !payload?.length) return null;
   const p = payload[0].payload;
   return (
-    <div className="chart-tip">
-      <div className="chart-tip-title">{p.detail}</div>
-      <div><i className="sw sw-in" /> Entradas: <strong>{fmtUsd(p.entradas)}</strong></div>
-      <div><i className="sw sw-out" /> Salidas: <strong>{fmtUsd(p.salidas)}</strong></div>
-      <div className="muted">Balance: {fmtUsd(p.entradas - p.salidas)}</div>
-    </div>
+    <ChartTip title={p.detail}>
+      <div>
+        <Swatch className="bg-flow-in" /> Entradas: <strong>{fmtUsd(p.entradas)}</strong>
+      </div>
+      <div>
+        <Swatch className="bg-flow-out" /> Salidas: <strong>{fmtUsd(p.salidas)}</strong>
+      </div>
+      <div className="text-ink-2">Balance: {fmtUsd(p.entradas - p.salidas)}</div>
+    </ChartTip>
   );
 }
 
@@ -230,59 +233,57 @@ function RatesCard({
     setEditing(false);
   };
 
+  const rate = (label: string, value: number | null | undefined) => (
+    <div className="flex flex-col">
+      <span className="text-[13px] text-ink-2">{label}</span>
+      <strong className="font-display text-[22px] tabular-nums">{value ? `${fmtNum(value)} Bs` : '—'}</strong>
+    </div>
+  );
+
   return (
-    <section className="card rates-card">
-      <div className="rates-values">
-        <div>
-          <span className="muted small">BCV Dólar</span>
-          <strong className="rate">{rates ? `${fmtNum(rates.usd)} Bs` : '—'}</strong>
-        </div>
-        <div>
-          <span className="muted small">BCV Euro</span>
-          <strong className="rate">{rates ? `${fmtNum(rates.eur)} Bs` : '—'}</strong>
-        </div>
-        <div>
-          <span className="muted small">Tu USDT (compra prom.)</span>
-          <strong className="rate">{avgUsdt ? `${fmtNum(avgUsdt)} Bs` : '—'}</strong>
-        </div>
+    <Card className="flex flex-wrap items-center justify-between gap-4">
+      <div className="flex flex-wrap gap-8">
+        {rate('BCV Dólar', rates?.usd)}
+        {rate('BCV Euro', rates?.eur)}
+        {rate('Tu USDT (compra prom.)', avgUsdt)}
       </div>
-      <div className="rates-meta">
+      <div className="flex flex-col gap-1.5 lg:items-end">
         {rates && (
-          <span className="muted small">
+          <span className="text-[13px] text-ink-2">
             {rates.source === 'bcv' ? 'Tasa oficial BCV' : 'Tasa escrita a mano'} del {formatDM(fromISO(rates.date))}
           </span>
         )}
-        {status.state === 'error' && <span className="hint warn">{status.message}</span>}
-        <div className="form-actions">
-          <button className="btn ghost small" onClick={onRefresh} disabled={status.state === 'loading'}>
-            {status.state === 'loading' ? 'Actualizando…' : '↻ Actualizar BCV'}
-          </button>
-          <button className="btn ghost small" onClick={startEdit}>
-            ✎ Escribir tasa
-          </button>
-        </div>
+        {status.state === 'error' && <Hint tone="warn">{status.message}</Hint>}
+        <FormActions>
+          <Button variant="ghost" size="sm" onClick={onRefresh} disabled={status.state === 'loading'}>
+            <RefreshIcon size={14} className={cn(status.state === 'loading' && 'animate-spin')} />
+            {status.state === 'loading' ? 'Actualizando…' : 'Actualizar BCV'}
+          </Button>
+          <Button variant="ghost" size="sm" onClick={startEdit}>
+            <PencilIcon size={14} />
+            Escribir tasa
+          </Button>
+        </FormActions>
       </div>
       {editing && (
-        <div className="field-row rates-edit">
-          <label className="field">
-            <span>BCV $ (Bs)</span>
-            <input className="input" inputMode="decimal" value={usd} onChange={(e) => setUsd(e.target.value)} />
-          </label>
-          <label className="field">
-            <span>BCV € (Bs)</span>
-            <input className="input" inputMode="decimal" value={eur} onChange={(e) => setEur(e.target.value)} />
-          </label>
-          <div className="form-actions end">
-            <button className="btn primary small" onClick={save}>
+        <FieldRow className="w-full">
+          <Field label="BCV $ (Bs)">
+            <Input inputMode="decimal" value={usd} onChange={(e) => setUsd(e.target.value)} />
+          </Field>
+          <Field label="BCV € (Bs)">
+            <Input inputMode="decimal" value={eur} onChange={(e) => setEur(e.target.value)} />
+          </Field>
+          <FormActions className="items-end">
+            <Button variant="primary" size="sm" onClick={save}>
               Guardar
-            </button>
-            <button className="btn ghost small" onClick={() => setEditing(false)}>
+            </Button>
+            <Button variant="ghost" size="sm" onClick={() => setEditing(false)}>
               Cancelar
-            </button>
-          </div>
-        </div>
+            </Button>
+          </FormActions>
+        </FieldRow>
       )}
-    </section>
+    </Card>
   );
 }
 
@@ -319,17 +320,15 @@ function Calculator({ rates, avgUsdt }: { rates: Rates | null; avgUsdt: number |
         ];
 
   return (
-    <section className="card">
-      <h2>Calculadora</h2>
-      <div className="calc">
-        <div className="field-row">
-          <label className="field">
-            <span>Monto</span>
-            <input className="input amount-input" inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} />
-          </label>
-          <div className="field">
-            <span>Moneda</span>
-            <div className="segmented">
+    <Card>
+      <CardTitle>Calculadora</CardTitle>
+      <div className="flex flex-col gap-3.5">
+        <FieldRow>
+          <Field label="Monto">
+            <Input amount inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} />
+          </Field>
+          <Field label="Moneda" as="div">
+            <Segmented>
               {(
                 [
                   ['USD', '$'],
@@ -338,38 +337,36 @@ function Calculator({ rates, avgUsdt }: { rates: Rates | null; avgUsdt: number |
                   ['USDT', 'USDT'],
                 ] as [CalcUnit, string][]
               ).map(([u, l]) => (
-                <button type="button" key={u} className={unit === u ? 'active' : ''} onClick={() => setUnit(u)}>
+                <SegmentedOption key={u} active={unit === u} onClick={() => setUnit(u)}>
                   {l}
-                </button>
+                </SegmentedOption>
               ))}
-            </div>
-          </div>
-          <label className="field">
-            <span>Tasa USDT (Bs)</span>
-            <input
-              className="input"
+            </Segmented>
+          </Field>
+          <Field label="Tasa USDT (Bs)">
+            <Input
               inputMode="decimal"
               value={usdtRate}
               onChange={(e) => setUsdtRate(e.target.value)}
               placeholder={avgUsdt ? `${fmtNum(avgUsdt)} (tu promedio)` : rates ? `${fmtNum(rates.usd)} (BCV)` : ''}
             />
-          </label>
-        </div>
+          </Field>
+        </FieldRow>
         {rows.length === 0 ? (
-          <p className="muted">{rates ? 'Escribe un monto válido.' : 'Necesitas la tasa BCV para convertir.'}</p>
+          <p className="text-ink-2">{rates ? 'Escribe un monto válido.' : 'Necesitas la tasa BCV para convertir.'}</p>
         ) : (
-          <div className="calc-results">
+          <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
             {rows
               .filter((r) => r.unit !== unit)
               .map((r) => (
-                <div key={r.unit}>
-                  <span className="muted small">{r.label}</span>
-                  <strong>{r.value}</strong>
+                <div key={r.unit} className="flex flex-col rounded-xl bg-surface-2 px-3 py-2.5">
+                  <span className="text-[13px] text-ink-2">{r.label}</span>
+                  <strong className="font-display text-lg tabular-nums">{r.value}</strong>
                 </div>
               ))}
           </div>
         )}
       </div>
-    </section>
+    </Card>
   );
 }

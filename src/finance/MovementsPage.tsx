@@ -4,6 +4,12 @@ import { ACCOUNT_CURRENCY, ACCOUNT_ICON, ACCOUNT_LABEL, CLASS_LABEL, INCOME_LABE
 import { fmtAccount, fmtBs, fmtUsd, isTransfer, movementBs, movementUsd } from './calc';
 import { MONTH_NAMES, formatDM, fromISO, today } from '../lib/dates';
 import MovementForm from './MovementForm';
+import { ChevronLeftIcon, ChevronRightIcon, RefreshIcon } from '../components/Icons';
+import {
+  Button, Card, CardHead, Chip, Empty, IconBadge, List, ListItem, MiniStat, MiniStats, Tag, TwoCol, cn, type TagTone,
+} from '../ui';
+
+const CLASS_TONE: Record<string, TagTone> = { gasto: 'out', costo: 'accent' };
 
 interface Props {
   kind: MovementKind;
@@ -67,61 +73,50 @@ export default function MovementsPage({ kind, data, onAdd, onUpdate, onDelete }:
   const isSalida = kind === 'salida';
 
   return (
-    <div className="two-col">
+    <TwoCol>
       <MovementForm kind={kind} data={data} editing={editing} onSubmit={submit} onCancel={() => setEditing(null)} />
 
-      <section className="card">
-        <div className="card-head">
+      <Card delay={0.08}>
+        <CardHead>
           <div>
             <h2>{isSalida ? 'Salidas' : 'Entradas'}</h2>
-            <p className="muted">
+            <p className="text-ink-2">
               {MONTH_NAMES[ym.m]} {ym.y}
             </p>
           </div>
-          <div className="week-nav">
-            <button className="btn ghost" onClick={() => shiftMonth(-1)} aria-label="Mes anterior">
-              ‹
-            </button>
-            <button
-              className="btn ghost"
+          <div className="flex gap-1.5">
+            <Button variant="ghost" className="px-2.5" onClick={() => shiftMonth(-1)} aria-label="Mes anterior">
+              <ChevronLeftIcon />
+            </Button>
+            <Button
+              variant="ghost"
               onClick={() => setYm({ y: t.getFullYear(), m: t.getMonth() })}
               disabled={ym.y === t.getFullYear() && ym.m === t.getMonth()}
             >
               Este mes
-            </button>
-            <button className="btn ghost" onClick={() => shiftMonth(1)} aria-label="Mes siguiente">
-              ›
-            </button>
+            </Button>
+            <Button variant="ghost" className="px-2.5" onClick={() => shiftMonth(1)} aria-label="Mes siguiente">
+              <ChevronRightIcon />
+            </Button>
           </div>
-        </div>
+        </CardHead>
 
-        <div className="mini-stats">
-          <div>
-            <span className="muted small">Total {isSalida ? 'salido' : 'entrado'}</span>
-            <strong>{fmtUsd(totalUsd)}</strong>
-            <span className="muted small">{fmtBs(totalBs)}</span>
-          </div>
+        <MiniStats>
+          <MiniStat label={`Total ${isSalida ? 'salido' : 'entrado'}`} value={fmtUsd(totalUsd)} sub={fmtBs(totalBs)} />
           {isSalida && (
             <>
-              <div>
-                <span className="muted small">Gastos</span>
-                <strong>{fmtUsd(gastoUsd)}</strong>
-              </div>
-              <div>
-                <span className="muted small">Costos</span>
-                <strong>{fmtUsd(costoUsd)}</strong>
-              </div>
+              <MiniStat label="Gastos" value={fmtUsd(gastoUsd)} />
+              <MiniStat label="Costos" value={fmtUsd(costoUsd)} />
             </>
           )}
-          <div>
-            <span className="muted small">Movimientos</span>
-            <strong>{monthItems.length}</strong>
-          </div>
-        </div>
-        <p className="muted small note">Los totales no incluyen cambios de divisas. Montos en $ y Bs con la tasa BCV de cada día.</p>
+          <MiniStat label="Movimientos" value={monthItems.length} />
+        </MiniStats>
+        <p className="mb-3.5 text-[13px] text-ink-2">
+          Los totales no incluyen cambios de divisas. Montos en $ y Bs con la tasa BCV de cada día.
+        </p>
 
         {isSalida && (
-          <div className="filters">
+          <div className="mb-3.5 flex flex-wrap gap-1.5">
             {(
               [
                 ['todos', 'Todos'],
@@ -130,68 +125,69 @@ export default function MovementsPage({ kind, data, onAdd, onUpdate, onDelete }:
                 ['cambios', 'Cambios / ventas'],
               ] as const
             ).map(([id, label]) => (
-              <button key={id} className={`chip ${filter === id ? 'active' : ''}`} onClick={() => setFilter(id)}>
+              <Chip key={id} active={filter === id} onClick={() => setFilter(id)} aria-pressed={filter === id}>
                 {label}
-              </button>
+              </Chip>
             ))}
           </div>
         )}
 
         {visible.length === 0 ? (
-          <p className="empty">No hay {isSalida ? 'salidas' : 'entradas'} en este mes.</p>
+          <Empty>No hay {isSalida ? 'salidas' : 'entradas'} en este mes.</Empty>
         ) : (
-          <ul className="list">
-            {visible.map((m) => (
-              <li key={m.id} className={`list-item mov ${editing?.id === m.id ? 'editing' : ''}`}>
-                <span className="list-icon" aria-hidden title={ACCOUNT_LABEL[m.account]}>
-                  {ACCOUNT_ICON[m.account]}
-                </span>
-                <div className="list-body">
-                  <div className="task-top">
-                    <strong>{m.description || (isSalida ? m.category ?? REASON_LABEL[m.reason!] : INCOME_LABEL[m.incomeType!])}</strong>
-                  </div>
-                  <div className="task-meta">
-                    <span className="muted small">
+          <List>
+            {visible.map((m, i) => (
+              <ListItem key={m.id} index={i} editing={editing?.id === m.id}>
+                <IconBadge title={ACCOUNT_LABEL[m.account]}>{ACCOUNT_ICON[m.account]}</IconBadge>
+                <div className="flex min-w-0 flex-1 flex-col gap-1">
+                  <strong>{m.description || (isSalida ? m.category ?? REASON_LABEL[m.reason!] : INCOME_LABEL[m.incomeType!])}</strong>
+                  <div className="flex flex-wrap items-center gap-2.5">
+                    <span className="text-[13px] text-ink-2">
                       {formatDM(fromISO(m.date))} · {ACCOUNT_LABEL[m.account]}
                     </span>
                     {isTransfer(m) ? (
-                      <span className="tag tag-transfer">🔄 {isSalida ? REASON_LABEL[m.reason!] : 'Cambio'}</span>
+                      <Tag className="inline-flex items-center gap-1">
+                        <RefreshIcon size={12} />
+                        {isSalida ? REASON_LABEL[m.reason!] : 'Cambio'}
+                      </Tag>
                     ) : isSalida ? (
                       <>
-                        <span className={`tag tag-${m.expenseClass}`}>{CLASS_LABEL[m.expenseClass!]}</span>
-                        <span className="tag prio-baja">{m.category}</span>
-                        {m.reason && m.reason !== 'compra' && <span className="tag prio-baja">{REASON_LABEL[m.reason]}</span>}
+                        <Tag tone={CLASS_TONE[m.expenseClass!]}>{CLASS_LABEL[m.expenseClass!]}</Tag>
+                        <Tag>{m.category}</Tag>
+                        {m.reason && m.reason !== 'compra' && <Tag>{REASON_LABEL[m.reason]}</Tag>}
                       </>
                     ) : (
-                      <span className="tag tag-income">{INCOME_LABEL[m.incomeType!]}</span>
+                      <Tag tone="good">{INCOME_LABEL[m.incomeType!]}</Tag>
                     )}
                     {m.account === 'usdt' && m.usdtRate && (
-                      <span className="muted small">Tasa USDT {m.usdtRate.toLocaleString('es-VE', { maximumFractionDigits: 2 })}</span>
+                      <span className="text-[13px] text-ink-2">
+                        Tasa USDT {m.usdtRate.toLocaleString('es-VE', { maximumFractionDigits: 2 })}
+                      </span>
                     )}
                   </div>
                 </div>
-                <div className="mov-amount">
-                  <strong className={isSalida ? 'amt-out' : 'amt-in'}>
+                <div className="flex flex-col items-start tabular-nums sm:items-end sm:text-right">
+                  <strong className={cn(!isSalida && 'text-good-ink')}>
                     {isSalida ? '−' : '+'}
                     {fmtAccount(m.account, m.amount)}
                   </strong>
-                  <span className="muted small">
+                  <span className="text-[13px] text-ink-2">
                     ≈ {ACCOUNT_CURRENCY[m.account] === 'USD' ? fmtBs(movementBs(m)) : fmtUsd(movementUsd(m))}
                   </span>
                 </div>
-                <div className="list-actions">
-                  <button className="btn ghost small" onClick={() => setEditing(m)}>
+                <div className="flex flex-wrap justify-end gap-1.5">
+                  <Button variant="ghost" size="sm" onClick={() => setEditing(m)}>
                     Editar
-                  </button>
-                  <button className="btn danger small" onClick={() => remove(m)}>
+                  </Button>
+                  <Button variant="danger" size="sm" onClick={() => remove(m)}>
                     Eliminar
-                  </button>
+                  </Button>
                 </div>
-              </li>
+              </ListItem>
             ))}
-          </ul>
+          </List>
         )}
-      </section>
-    </div>
+      </Card>
+    </TwoCol>
   );
 }

@@ -3,6 +3,11 @@ import type { Activity, BodyEntry, Goal, Profile, Sex, Targets } from './types';
 import { ACTIVITY_LABEL, GOAL_LABEL, GOAL_PROTEIN_PER_KG } from './defaults';
 import { MACRO_KEYS, MACRO_LABEL, MACRO_UNIT, computePlan, fmt1, latestBody, latestBodyFat } from './calc';
 import { parseAmount } from '../finance/calc';
+import { CheckCircleIcon } from '../components/Icons';
+import {
+  Button, Card, CardTitle, Field, FieldRow, FormActions, FormError, Hint, Input, MiniStat, MiniStats, Segmented, SegmentedOption,
+  Select, TwoCol, formClass,
+} from '../ui';
 
 interface Props {
   profile: Profile | null;
@@ -56,79 +61,63 @@ export default function GoalsPage({ profile, targets, body, onProfile, onTargets
   };
 
   return (
-    <div className="two-col">
-      <section className="card">
-        <h2>Mis datos</h2>
-        <div className="form">
-          <div className="field">
-            <span>Sexo</span>
-            <div className="segmented">
+    <TwoCol>
+      <Card>
+        <CardTitle>Mis datos</CardTitle>
+        <div className={formClass}>
+          <Field label="Sexo" as="div">
+            <Segmented>
               {(['hombre', 'mujer'] as Sex[]).map((s) => (
-                <button type="button" key={s} className={p.sex === s ? 'active' : ''} onClick={() => setP({ ...p, sex: s })}>
+                <SegmentedOption key={s} active={p.sex === s} onClick={() => setP({ ...p, sex: s })}>
                   {s === 'hombre' ? 'Hombre' : 'Mujer'}
-                </button>
+                </SegmentedOption>
               ))}
-            </div>
-          </div>
-          <div className="field-row">
-            <label className="field">
-              <span>Edad</span>
-              <input className="input" inputMode="numeric" value={age} onChange={(e) => setAge(e.target.value)} />
-            </label>
-            <label className="field">
-              <span>Estatura (cm)</span>
-              <input className="input" inputMode="decimal" value={height} onChange={(e) => setHeight(e.target.value)} />
-            </label>
-          </div>
-          <label className="field">
-            <span>Actividad</span>
-            <select className="input" value={p.activity} onChange={(e) => setP({ ...p, activity: e.target.value as Activity })}>
+            </Segmented>
+          </Field>
+          <FieldRow>
+            <Field label="Edad">
+              <Input inputMode="numeric" value={age} onChange={(e) => setAge(e.target.value)} />
+            </Field>
+            <Field label="Estatura (cm)">
+              <Input inputMode="decimal" value={height} onChange={(e) => setHeight(e.target.value)} />
+            </Field>
+          </FieldRow>
+          <Field label="Actividad">
+            <Select value={p.activity} onChange={(e) => setP({ ...p, activity: e.target.value as Activity })}>
               {Object.entries(ACTIVITY_LABEL).map(([k, v]) => (
                 <option key={k} value={k}>
                   {v}
                 </option>
               ))}
-            </select>
-          </label>
-          <label className="field">
-            <span>Objetivo</span>
-            <select className="input" value={p.goal} onChange={(e) => setP({ ...p, goal: e.target.value as Goal })}>
+            </Select>
+          </Field>
+          <Field label="Objetivo">
+            <Select value={p.goal} onChange={(e) => setP({ ...p, goal: e.target.value as Goal })}>
               {Object.entries(GOAL_LABEL).map(([k, v]) => (
                 <option key={k} value={k}>
                   {v}
                 </option>
               ))}
-            </select>
-          </label>
-          <p className="muted small">
+            </Select>
+          </Field>
+          <p className="text-[13px] text-ink-2">
             Peso usado: {last ? `${fmt1(last.weight)} kg` : 'sin registro (agrégalo en “Cuerpo”)'}
             {bodyFat !== undefined && ` · Grasa: ${fmt1(bodyFat)} %`}
           </p>
-          {!validProfile && <p className="form-error">Revisa la edad (14–100) y la estatura en cm.</p>}
+          {!validProfile && <FormError>Revisa la edad (14–100) y la estatura en cm.</FormError>}
         </div>
 
         {plan && (
-          <div className="plan">
+          <div className="mt-[18px] flex flex-col items-start gap-2.5 border-t border-grid pt-4">
             <h3>Cálculo recomendado</h3>
-            <div className="mini-stats">
-              <div>
-                <span className="muted small">Metabolismo basal</span>
-                <strong>{fmt1(plan.bmr)} kcal</strong>
-              </div>
-              <div>
-                <span className="muted small">Gasto diario</span>
-                <strong>{fmt1(plan.tdee)} kcal</strong>
-              </div>
-              {plan.leanMass !== null && (
-                <div>
-                  <span className="muted small">Masa magra</span>
-                  <strong>{fmt1(plan.leanMass)} kg</strong>
-                </div>
-              )}
-            </div>
-            <ul className="plan-list">
+            <MiniStats className="mb-0">
+              <MiniStat label="Metabolismo basal" value={`${fmt1(plan.bmr)} kcal`} />
+              <MiniStat label="Gasto diario" value={`${fmt1(plan.tdee)} kcal`} />
+              {plan.leanMass !== null && <MiniStat label="Masa magra" value={`${fmt1(plan.leanMass)} kg`} />}
+            </MiniStats>
+            <ul className="m-0 flex w-full list-none flex-col gap-1 p-0">
               {MACRO_KEYS.map((k) => (
-                <li key={k}>
+                <li key={k} className="flex justify-between rounded-lg bg-surface-2 px-2.5 py-1.5 tabular-nums">
                   <span>{MACRO_LABEL[k]}</span>
                   <strong>
                     {fmt1(plan.targets[k])} {MACRO_UNIT[k]}
@@ -136,49 +125,51 @@ export default function GoalsPage({ profile, targets, body, onProfile, onTargets
                 </li>
               ))}
             </ul>
-            <p className="muted small">
+            <p className="text-[13px] text-ink-2">
               Fórmula {plan.method}
               {plan.method === 'Katch-McArdle' ? ' (usa tu % de grasa, más precisa)' : ' (registra tu % de grasa para mayor precisión)'}.
               Proteína {GOAL_PROTEIN_PER_KG[p.goal]} g por kg, grasa 25 % de las calorías y carbohidratos el resto.
             </p>
-            <button className="btn primary" onClick={applyPlan}>
+            <Button variant="primary" onClick={applyPlan}>
               Usar estos objetivos
-            </button>
+            </Button>
           </div>
         )}
-      </section>
+      </Card>
 
-      <section className="card">
-        <h2>Mis objetivos diarios</h2>
-        <div className="form">
+      <Card delay={0.08}>
+        <CardTitle>Mis objetivos diarios</CardTitle>
+        <div className={formClass}>
           {MACRO_KEYS.map((k) => (
-            <label key={k} className="field inline-field">
-              <span>
-                {MACRO_LABEL[k]} ({MACRO_UNIT[k]})
-              </span>
-              <input
-                className="input"
+            <Field key={k} inline label={`${MACRO_LABEL[k]} (${MACRO_UNIT[k]})`}>
+              <Input
+                className="w-[140px] text-right"
                 inputMode="decimal"
                 value={manual[k]}
                 onChange={(e) => setManual({ ...manual, [k]: e.target.value })}
               />
-            </label>
+            </Field>
           ))}
-          <p className="hint">
+          <Hint>
             Las calorías de tus macros suman{' '}
             {fmt1(
               (parseAmount(manual.protein) || 0) * 4 + (parseAmount(manual.carbs) || 0) * 4 + (parseAmount(manual.fat) || 0) * 9,
             )}{' '}
             kcal.
-          </p>
-          <div className="form-actions">
-            <button className="btn primary" onClick={saveManual}>
+          </Hint>
+          <FormActions className="items-center">
+            <Button variant="primary" onClick={saveManual}>
               Guardar objetivos
-            </button>
-            {saved && <span className="hint ok">✓ {saved}</span>}
-          </div>
+            </Button>
+            {saved && (
+              <Hint tone="ok" className="inline-flex items-center gap-1.5" role="status">
+                <CheckCircleIcon size={14} />
+                {saved}
+              </Hint>
+            )}
+          </FormActions>
         </div>
-      </section>
-    </div>
+      </Card>
+    </TwoCol>
   );
 }
